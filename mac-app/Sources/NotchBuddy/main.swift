@@ -6,8 +6,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let networkMonitor = NetworkMonitor()
     let cpuMonitor = CPUMonitor()
 
-    let panelWidth: CGFloat = 430
-    let panelHeight: CGFloat = 480
+    let panelWidth: CGFloat = 510
+    let panelHeight: CGFloat = 580
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory) // Hides from Dock, behaves as sleek menu bar companion
@@ -52,7 +52,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let screen = NSScreen.main else { return }
         let screenFrame = screen.frame
 
-        // Center horizontally on display, align flush to the top edge of the screen
+        // Center horizontally on display, align flush to top edge
         let xPos = screenFrame.origin.x + (screenFrame.width - panelWidth) / 2
         let yPos = screenFrame.origin.y + screenFrame.height - panelHeight
 

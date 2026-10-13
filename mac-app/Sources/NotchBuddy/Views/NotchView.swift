@@ -1,13 +1,19 @@
 import SwiftUI
+import AppKit
 
-// MARK: - Companion Performance Tier
+// MARK: - Companion Reaction Mode & Expression Tiers
+public enum ReactionMode: String, CaseIterable {
+    case network = "Network Speed"
+    case cpu     = "CPU Load"
+}
+
 public enum GhostExpressionTier: String, CaseIterable {
-    case sleep    = "sleep"    // < 10 KB/s
-    case happy    = "happy"    // 10 KB - 500 KB/s
-    case focus    = "focus"    // 500 KB - 1 MB/s
-    case strain   = "strain"   // 1 MB - 5 MB/s
-    case panic    = "panic"    // 5 MB - 10 MB/s
-    case dead     = "dead"     // > 10 MB/s
+    case sleep    = "sleep"    // Peaceful / Idle
+    case happy    = "happy"    // Light traffic
+    case focus    = "focus"    // Moderate traffic / streaming
+    case strain   = "strain"   // Heavy load
+    case panic    = "panic"    // Extreme traffic / stress
+    case dead     = "dead"     // Saturated / pegged
 }
 
 // MARK: - Pet Particle Model
@@ -23,19 +29,23 @@ struct PetParticle: Identifiable {
 public struct NotchView: View {
     @ObservedObject var networkMonitor: NetworkMonitor
     @ObservedObject var cpuMonitor: CPUMonitor
-    
+
     @State private var isExpanded = false
+    @State private var showSettings = false
     @State private var isPetted = false
     @State private var useBits = false
-    @State private var speedHistory: [Double] = Array(repeating: 0, count: 24)
+    @State private var reactionMode: ReactionMode = .network
+    @State private var speedHistory: [Double] = Array(repeating: 0, count: 20)
     @State private var particles: [PetParticle] = []
-    
-    // User configurable speed thresholds (in KB/s)
+    @State private var copiedIP = false
+
+    // Configurable thresholds (in KB/s for network, % for CPU)
     @State private var threshSleep: Double  = 10.0
     @State private var threshHappy: Double  = 500.0
     @State private var threshFocus: Double  = 1024.0
     @State private var threshStrain: Double = 5120.0
     @State private var threshPanic: Double  = 10240.0
+    @State private var quotaLimitGB: Double = 100.0
 
     public init(networkMonitor: NetworkMonitor, cpuMonitor: CPUMonitor) {
         self.networkMonitor = networkMonitor
@@ -43,51 +53,73 @@ public struct NotchView: View {
     }
 
     public var currentTier: GhostExpressionTier {
-        let downKb = networkMonitor.downloadSpeed / 1024.0
-        if downKb >= threshPanic  { return .dead }
-        if downKb >= threshStrain { return .panic }
-        if downKb >= threshFocus  { return .strain }
-        if downKb >= threshHappy  { return .focus }
-        if downKb >= threshSleep  { return .happy }
-        return .sleep
+        if reactionMode == .cpu {
+            let cpu = cpuMonitor.cpuUsagePercentage
+            if cpu >= 95 { return .dead }
+            if cpu >= 85 { return .panic }
+            if cpu >= 65 { return .strain }
+            if cpu >= 40 { return .focus }
+            if cpu >= 15 { return .happy }
+            return .sleep
+        } else {
+            let downKb = networkMonitor.downloadSpeed / 1024.0
+            if downKb >= threshPanic  { return .dead }
+            if downKb >= threshStrain { return .panic }
+            if downKb >= threshFocus  { return .strain }
+            if downKb >= threshHappy  { return .focus }
+            if downKb >= threshSleep  { return .happy }
+            return .sleep
+        }
     }
 
     public var body: some View {
         VStack(spacing: 0) {
-            // ── Notch Bar & Wing Telemetry ──────────────────────────────
+            // ── Notch Bar & Wing Telemetry (Calibrated for M4 MacBook Air: 490pt wide, 210pt notch cutout) ──
             HStack(spacing: 0) {
-                // Left Wing: Live Network Speeds
-                HStack(spacing: 8) {
+                // Left Wing: Stacked Speeds + Live Mini Sparkline
+                HStack(spacing: 7) {
                     let d = formatSpeed(networkMonitor.downloadSpeed, useBits: useBits)
                     let u = formatSpeed(networkMonitor.uploadSpeed, useBits: useBits)
 
-                    HStack(spacing: 3) {
-                        Text("↓")
-                            .foregroundColor(Color(red: 0.25, green: 0.79, blue: 0.50))
-                            .fontWeight(.bold)
-                            .font(.system(size: 11))
-                        Text("\(d.val) \(d.unit)")
-                            .foregroundColor(.white)
-                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    VStack(alignment: .leading, spacing: 1) {
+                        HStack(spacing: 3) {
+                            Text("↓")
+                                .foregroundColor(Color(red: 0.25, green: 0.79, blue: 0.50))
+                                .fontWeight(.black)
+                                .font(.system(size: 10))
+                            Text(d.val)
+                                .foregroundColor(.white)
+                                .font(.system(size: 10.5, weight: .bold, design: .monospaced))
+                            Text(d.unit)
+                                .foregroundColor(Color(white: 0.65))
+                                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        }
+                        HStack(spacing: 3) {
+                            Text("↑")
+                                .foregroundColor(Color(red: 0.35, green: 0.65, blue: 1.0))
+                                .fontWeight(.black)
+                                .font(.system(size: 10))
+                            Text(u.val)
+                                .foregroundColor(.white)
+                                .font(.system(size: 10.5, weight: .bold, design: .monospaced))
+                            Text(u.unit)
+                                .foregroundColor(Color(white: 0.65))
+                                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        }
                     }
 
-                    HStack(spacing: 3) {
-                        Text("↑")
-                            .foregroundColor(Color(red: 0.35, green: 0.65, blue: 1.0))
-                            .fontWeight(.bold)
-                            .font(.system(size: 11))
-                        Text("\(u.val) \(u.unit)")
-                            .foregroundColor(.white)
-                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    }
+                    // Mini Live Canvas Sparkline
+                    MiniSparklineCanvas(data: speedHistory)
+                        .frame(width: 44, height: 16)
                 }
                 .padding(.leading, 12)
                 .frame(width: 140, alignment: .leading)
 
-                // Center Notch Cutout Spacer
+                // Center Notch Cutout Gap (210pt clear for M4 MacBook Air camera bezel)
                 Spacer()
+                    .frame(width: 210)
 
-                // Right Wing: Latency & CPU
+                // Right Wing: Latency Ping & CPU Badge
                 HStack(spacing: 8) {
                     Circle()
                         .fill(pingColor)
@@ -106,7 +138,7 @@ public struct NotchView: View {
                 .padding(.trailing, 12)
                 .frame(width: 140, alignment: .trailing)
             }
-            .frame(width: 410, height: 34)
+            .frame(width: 490, height: 34)
             .background(Color.black)
             .cornerRadius(18)
             .contentShape(Rectangle())
@@ -116,7 +148,7 @@ public struct NotchView: View {
                 }
             }
 
-            // ── Glitch Ghost Bay (Hangs directly below the notch) ───────
+            // ── Glitch Ghost Bay (Hangs directly below the notch cutout) ──
             ZStack {
                 if !isExpanded {
                     GlitchGhostCanvas(tier: currentTier, isPetted: isPetted)
@@ -128,7 +160,7 @@ public struct NotchView: View {
                         .scaleEffect(isPetted ? 1.08 : 1.0)
                         .animation(.spring(response: 0.25, dampingFraction: 0.6), value: isPetted)
 
-                    // Pet Sparkle Particles (Fanning outward to sides & downward)
+                    // Pet Sparkle Particles (Fanning outward to sides & downward into clear space)
                     ForEach(particles) { p in
                         Text(p.emoji)
                             .font(.system(size: 18))
@@ -140,21 +172,26 @@ public struct NotchView: View {
             }
             .frame(width: 160, height: 74)
 
-            // ── Expanded Notch HUD Popover ──────────────────────────────
+            // ── Expanded Notch HUD Popover ──
             if isExpanded {
                 VStack(spacing: 12) {
-                    // Top Mascot & Status Badge
+                    // Header Bar with Mascot, Reaction Mode, and Settings Gear
                     HStack(spacing: 12) {
                         GlitchGhostCanvas(tier: currentTier, isPetted: isPetted)
-                            .frame(width: 48, height: 48)
+                            .frame(width: 46, height: 46)
                             .background(Color.white.opacity(0.06))
                             .cornerRadius(12)
                             .onTapGesture { petGhost() }
 
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Glitch · Notch Ghost")
-                                .font(.system(size: 13, weight: .bold))
-                                .foregroundColor(.white)
+                            HStack(spacing: 6) {
+                                Text("Glitch · Notch Ghost")
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundColor(.white)
+                                Text("(\(reactionMode == .network ? "⚡ Net" : "🧠 CPU"))")
+                                    .font(.system(size: 9.5, weight: .bold, design: .monospaced))
+                                    .foregroundColor(accentColor)
+                            }
                             Text(tierDescription)
                                 .font(.system(size: 11, weight: .medium))
                                 .foregroundColor(accentColor)
@@ -162,133 +199,252 @@ public struct NotchView: View {
 
                         Spacer()
 
-                        Text("16 ms · Ultra Low")
-                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                            .foregroundColor(Color(red: 0.25, green: 0.79, blue: 0.50))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color(red: 0.25, green: 0.79, blue: 0.50).opacity(0.12))
-                            .cornerRadius(8)
+                        // Settings Gear Button
+                        Button(action: {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                showSettings.toggle()
+                            }
+                        }) {
+                            Image(systemName: showSettings ? "xmark.circle.fill" : "gearshape.fill")
+                                .font(.system(size: 14))
+                                .foregroundColor(showSettings ? .white : Color(white: 0.7))
+                                .padding(6)
+                                .background(Color.white.opacity(showSettings ? 0.20 : 0.08))
+                                .clipShape(Circle())
+                        }
+                        .buttonStyle(.plain)
                     }
 
                     Divider().background(Color.white.opacity(0.10))
 
-                    // Speed Meters & Bits/Bytes Toggle
-                    HStack {
-                        let d = formatSpeed(networkMonitor.downloadSpeed, useBits: useBits)
-                        let u = formatSpeed(networkMonitor.uploadSpeed, useBits: useBits)
-
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("DOWNLOAD SPEED")
-                                .font(.system(size: 9, weight: .bold))
+                    if showSettings {
+                        // ── SETTINGS VIEW ──────────────────────────────
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("SETTINGS & CONFIGURATION")
+                                .font(.system(size: 10, weight: .bold))
                                 .foregroundColor(Color(white: 0.5))
-                            Text("↓ \(d.val) \(d.unit)")
-                                .font(.system(size: 17, weight: .bold, design: .monospaced))
-                                .foregroundColor(Color(red: 0.25, green: 0.79, blue: 0.50))
-                        }
 
-                        Spacer()
-
-                        VStack(alignment: .trailing, spacing: 3) {
-                            Text("UPLOAD SPEED")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundColor(Color(white: 0.5))
-                            Text("↑ \(u.val) \(u.unit)")
-                                .font(.system(size: 17, weight: .bold, design: .monospaced))
-                                .foregroundColor(Color(red: 0.35, green: 0.65, blue: 1.0))
-                        }
-                    }
-
-                    // Unit Toggle Button
-                    HStack {
-                        Spacer()
-                        Button(action: { useBits.toggle() }) {
-                            HStack(spacing: 4) {
-                                Text("Unit:")
-                                    .foregroundColor(Color(white: 0.6))
-                                Text(useBits ? "Bits (b/s)" : "Bytes (B/s)")
-                                    .foregroundColor(.white)
-                                    .fontWeight(.semibold)
-                            }
-                            .font(.system(size: 10, design: .monospaced))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(Color.white.opacity(0.08))
-                            .cornerRadius(6)
-                        }
-                        .buttonStyle(.plain)
-                    }
-
-                    // Top Bandwidth Consuming Apps Breakdown
-                    VStack(spacing: 5) {
-                        HStack {
-                            Text("TOP BANDWIDTH APPS")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundColor(Color(white: 0.5))
-                            Spacer()
-                        }
-                        AppBandwidthRow(name: "Google Chrome", icon: "🌐", speed: "1.4 MB/s", pct: 0.70, color: .green)
-                        AppBandwidthRow(name: "Steam Client", icon: "🎮", speed: "420 KB/s", pct: 0.22, color: .blue)
-                        AppBandwidthRow(name: "Slack", icon: "💬", speed: "85 KB/s", pct: 0.08, color: .purple)
-                    }
-                    .padding(8)
-                    .background(Color.white.opacity(0.04))
-                    .cornerRadius(10)
-
-                    // Monthly Data Quota Progress Bar
-                    VStack(alignment: .leading, spacing: 5) {
-                        HStack {
-                            Text("MONTHLY QUOTA")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundColor(Color(white: 0.5))
-                            Spacer()
-                            Text("48.2 / 100 GB (48%)")
-                                .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                                .foregroundColor(.white)
-                        }
-                        GeometryReader { g in
-                            ZStack(alignment: .leading) {
-                                RoundedRectangle(cornerRadius: 3)
-                                    .fill(Color.white.opacity(0.12))
-                                    .frame(height: 6)
-                                RoundedRectangle(cornerRadius: 3)
-                                    .fill(LinearGradient(colors: [.blue, .cyan], startPoint: .leading, endPoint: .trailing))
-                                    .frame(width: g.size.width * 0.482, height: 6)
-                            }
-                        }
-                        .frame(height: 6)
-                    }
-                    .padding(8)
-                    .background(Color.white.opacity(0.04))
-                    .cornerRadius(10)
-
-                    // Quick Actions / Treat Button
-                    HStack {
-                        Button(action: { petGhost() }) {
-                            HStack(spacing: 4) {
-                                Text("🍬 Give Treat")
+                            // Companion Reaction Driver Switcher
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text("Companion Reaction Source:")
                                     .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(.white)
+                                Picker("", selection: $reactionMode) {
+                                    Text("⚡ Internet Speed").tag(ReactionMode.network)
+                                    Text("🧠 CPU Load").tag(ReactionMode.cpu)
+                                }
+                                .pickerStyle(.segmented)
                             }
-                            .foregroundColor(.pink)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background(Color.pink.opacity(0.12))
-                            .cornerRadius(8)
-                        }
-                        .buttonStyle(.plain)
 
-                        Spacer()
+                            // Telemetry Units
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text("Telemetry Unit Display:")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(.white)
+                                Picker("", selection: $useBits) {
+                                    Text("Bytes (KB/s, MB/s)").tag(false)
+                                    Text("Bits (Kbps, Mbps)").tag(true)
+                                }
+                                .pickerStyle(.segmented)
+                            }
 
-                        Button(action: { isExpanded = false }) {
-                            Text("Close HUD")
-                                .font(.system(size: 11))
-                                .foregroundColor(Color(white: 0.6))
+                            // Speed Reaction Thresholds
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Network Speed Tiers:")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(.white)
+                                ThresholdRow(label: "😊 Happy Threshold:", value: $threshHappy, unit: "KB/s", min: 50, max: 2000)
+                                ThresholdRow(label: "🎯 Focus Threshold:", value: $threshFocus, unit: "KB/s", min: 500, max: 5000)
+                                ThresholdRow(label: "😤 Strain Threshold:", value: $threshStrain, unit: "KB/s", min: 1000, max: 15000)
+                            }
                         }
-                        .buttonStyle(.plain)
+                        .padding(8)
+                    } else {
+                        // ── MAIN HUD DASHBOARD ─────────────────────────
+                        // Main Speed Displays & Peak Stats
+                        HStack {
+                            let d = formatSpeed(networkMonitor.downloadSpeed, useBits: useBits)
+                            let u = formatSpeed(networkMonitor.uploadSpeed, useBits: useBits)
+                            let peakD = formatSpeed(networkMonitor.peakDownloadSpeed, useBits: useBits)
+                            let peakU = formatSpeed(networkMonitor.peakUploadSpeed, useBits: useBits)
+
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("DOWNLOAD SPEED")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundColor(Color(white: 0.5))
+                                Text("↓ \(d.val) \(d.unit)")
+                                    .font(.system(size: 18, weight: .bold, design: .monospaced))
+                                    .foregroundColor(Color(red: 0.25, green: 0.79, blue: 0.50))
+                                Text("Peak: \(peakD.val) \(peakD.unit)")
+                                    .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                                    .foregroundColor(Color(white: 0.55))
+                            }
+
+                            Spacer()
+
+                            VStack(alignment: .trailing, spacing: 3) {
+                                Text("UPLOAD SPEED")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundColor(Color(white: 0.5))
+                                Text("↑ \(u.val) \(u.unit)")
+                                    .font(.system(size: 18, weight: .bold, design: .monospaced))
+                                    .foregroundColor(Color(red: 0.35, green: 0.65, blue: 1.0))
+                                Text("Peak: \(peakU.val) \(peakU.unit)")
+                                    .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                                    .foregroundColor(Color(white: 0.55))
+                            }
+                        }
+
+                        // Real Top Bandwidth Consuming Apps (Live nettop)
+                        VStack(spacing: 5) {
+                            HStack {
+                                HStack(spacing: 4) {
+                                    Text("🔥")
+                                    Text("TOP BANDWIDTH APPS")
+                                        .font(.system(size: 9, weight: .bold))
+                                        .foregroundColor(Color(white: 0.5))
+                                }
+                                Spacer()
+                                Text("REAL-TIME")
+                                    .font(.system(size: 8.5, weight: .bold, design: .monospaced))
+                                    .foregroundColor(.cyan)
+                            }
+
+                            if networkMonitor.topProcesses.isEmpty {
+                                Text("Scanning active macOS processes...")
+                                    .font(.system(size: 10, design: .monospaced))
+                                    .foregroundColor(Color(white: 0.5))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.vertical, 4)
+                            } else {
+                                ForEach(networkMonitor.topProcesses) { proc in
+                                    HStack(spacing: 8) {
+                                        Text(proc.icon).font(.system(size: 11))
+                                        Text(proc.name)
+                                            .font(.system(size: 11, weight: .medium))
+                                            .foregroundColor(.white)
+                                        Spacer()
+                                        Text(proc.speedFormatted)
+                                            .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                                            .foregroundColor(proc.isHighLoad ? .green : Color(white: 0.75))
+                                    }
+                                }
+                            }
+                        }
+                        .padding(10)
+                        .background(Color.white.opacity(0.04))
+                        .cornerRadius(10)
+
+                        // Monthly Data Quota Progress Bar
+                        VStack(alignment: .leading, spacing: 5) {
+                            let totalGB = Double(networkMonitor.sessionBytesDownloaded + networkMonitor.sessionBytesUploaded) / (1024 * 1024 * 1024)
+                            let pct = min(1.0, totalGB / quotaLimitGB)
+
+                            HStack {
+                                Text("SESSION / MONTHLY DATA")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundColor(Color(white: 0.5))
+                                Spacer()
+                                Text(String(format: "%.2f / %.0f GB (%.0f%%)", totalGB, quotaLimitGB, pct * 100))
+                                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                                    .foregroundColor(.white)
+                            }
+                            GeometryReader { g in
+                                ZStack(alignment: .leading) {
+                                    RoundedRectangle(cornerRadius: 3)
+                                        .fill(Color.white.opacity(0.12))
+                                        .frame(height: 6)
+                                    RoundedRectangle(cornerRadius: 3)
+                                        .fill(LinearGradient(colors: [.blue, .cyan], startPoint: .leading, endPoint: .trailing))
+                                        .frame(width: max(4, g.size.width * CGFloat(pct)), height: 6)
+                                }
+                            }
+                            .frame(height: 6)
+                        }
+                        .padding(10)
+                        .background(Color.white.opacity(0.04))
+                        .cornerRadius(10)
+
+                        // Real Network Info Chips (Interface, Local IP, Session Total)
+                        HStack(spacing: 8) {
+                            InfoChip(
+                                title: "INTERFACE",
+                                value: networkMonitor.activeInterfaceName
+                            )
+
+                            InfoChipWithAction(
+                                title: "IP ADDRESS",
+                                value: networkMonitor.localIPAddress,
+                                actionLabel: copiedIP ? "copied!" : "copy",
+                                actionColor: copiedIP ? .green : .cyan
+                            ) {
+                                NSPasteboard.general.clearContents()
+                                NSPasteboard.general.setString(networkMonitor.localIPAddress, forType: .string)
+                                copiedIP = true
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copiedIP = false }
+                            }
+
+                            let sessMb = Double(networkMonitor.sessionBytesDownloaded) / (1024 * 1024)
+                            InfoChip(
+                                title: "SESSION",
+                                value: sessMb > 1024 ? String(format: "%.2f GB", sessMb / 1024) : String(format: "%.0f MB", sessMb)
+                            )
+                        }
+
+                        // Action Buttons: Run Speedtest, Toggle Bits/Bytes, Give Treat
+                        HStack(spacing: 8) {
+                            // Live Speed Test Button
+                            Button(action: {
+                                networkMonitor.runSpeedTest {}
+                            }) {
+                                HStack(spacing: 5) {
+                                    if networkMonitor.isSpeedtesting {
+                                        ProgressView().scaleEffect(0.6).frame(width: 12, height: 12)
+                                        Text("Testing...")
+                                    } else {
+                                        Text("⚡ Run Speedtest")
+                                    }
+                                }
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(Color.blue.opacity(0.25))
+                                .cornerRadius(8)
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(networkMonitor.isSpeedtesting)
+
+                            // Quick Bits/Bytes Switch
+                            Button(action: { useBits.toggle() }) {
+                                Text(useBits ? "⇄ to MB/s" : "⇄ to Mbps")
+                                    .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                                    .foregroundColor(Color(white: 0.8))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 6)
+                                    .background(Color.white.opacity(0.08))
+                                    .cornerRadius(8)
+                            }
+                            .buttonStyle(.plain)
+
+                            Spacer()
+
+                            // Treat Button
+                            Button(action: { petGhost() }) {
+                                Text("🍬 Treat")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(.pink)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 6)
+                                    .background(Color.pink.opacity(0.14))
+                                    .cornerRadius(8)
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
                 }
                 .padding(14)
-                .frame(width: 410)
+                .frame(width: 440)
                 .background(.ultraThinMaterial)
                 .cornerRadius(20)
                 .overlay(
@@ -299,12 +455,16 @@ public struct NotchView: View {
                 .transition(.scale(scale: 0.94).combined(with: .opacity))
             }
         }
-        .frame(width: 430)
+        .frame(width: 500)
+        .onReceive(networkMonitor.$downloadSpeed) { newSpeed in
+            speedHistory.append(newSpeed)
+            if speedHistory.count > 20 { speedHistory.removeFirst() }
+        }
     }
 
     private func petGhost() {
         withAnimation { isPetted = true }
-        
+
         // Spawn particles fanning outward sideways and downward away from notch
         for i in 0..<2 {
             let emojis = ["💖", "✨", "👻", "🌸", "⭐", "💫"]
@@ -314,7 +474,7 @@ public struct NotchView: View {
             let dy: CGFloat = CGFloat.random(in: 12...38)
             let p = PetParticle(emoji: emoji, dx: dx, dy: dy, progress: 0.0)
             particles.append(p)
-            
+
             withAnimation(.easeOut(duration: 0.95)) {
                 if let idx = particles.firstIndex(where: { $0.id == p.id }) {
                     particles[idx].progress = 1.0
@@ -348,13 +508,24 @@ public struct NotchView: View {
 
     private var tierDescription: String {
         if isPetted { return "💖 Loving the pets!" }
-        switch currentTier {
-        case .sleep:  return "Idle (< 10 KB/s) · Drifting peacefully..."
-        case .happy:  return "Light Bandwidth (10–500 KB/s) · Cruising"
-        case .focus:  return "Medium Load (500 KB–1 MB/s) · Streaming"
-        case .strain: return "Heavy Load (1–5 MB/s) · Working hard!"
-        case .panic:  return "Extreme Load (5–10 MB/s) · High Traffic!"
-        case .dead:   return "Maxed Out (> 10 MB/s) · System Saturated"
+        if reactionMode == .cpu {
+            switch currentTier {
+            case .sleep:  return "CPU Idle (0–15%) · Napping peacefully"
+            case .happy:  return "CPU Light (16–40%) · Cruising smoothly"
+            case .focus:  return "CPU Active (41–65%) · Moderate processing"
+            case .strain: return "CPU Heavy (66–85%) · Heavy workload!"
+            case .panic:  return "CPU Stress (86–95%) · Cores maxing out!"
+            case .dead:   return "CPU Peak (96–100%) · Pegged at limit!"
+            }
+        } else {
+            switch currentTier {
+            case .sleep:  return "Idle (< 10 KB/s) · Drifting peacefully..."
+            case .happy:  return "Light Bandwidth (10–500 KB/s) · Cruising"
+            case .focus:  return "Medium Load (500 KB–1 MB/s) · Streaming"
+            case .strain: return "Heavy Load (1–5 MB/s) · Working hard!"
+            case .panic:  return "Extreme Load (5–10 MB/s) · High Traffic!"
+            case .dead:   return "Maxed Out (> 10 MB/s) · Network Saturated"
+            }
         }
     }
 
@@ -376,29 +547,110 @@ public struct NotchView: View {
     }
 }
 
-// MARK: - Top Bandwidth App Row Component
-struct AppBandwidthRow: View {
-    let name: String
-    let icon: String
-    let speed: String
-    let pct: CGFloat
-    let color: Color
+// MARK: - Mini Sparkline Canvas in Wing
+struct MiniSparklineCanvas: View {
+    let data: [Double]
 
     var body: some View {
-        HStack(spacing: 8) {
-            Text(icon).font(.system(size: 11))
-            Text(name)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(.white)
-            Spacer()
-            Text(speed)
-                .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
-                .foregroundColor(color)
+        Canvas { context, size in
+            guard data.count > 1 else { return }
+            let maxVal = max(data.max() ?? 10.0, 1024.0)
+            let stepX = size.width / CGFloat(data.count - 1)
+
+            var path = Path()
+            for (i, val) in data.enumerated() {
+                let x = CGFloat(i) * stepX
+                let y = size.height - 2 - (CGFloat(min(1.0, val / maxVal)) * (size.height - 4))
+                if i == 0 { path.move(to: CGPoint(x: x, y: y)) }
+                else { path.addLine(to: CGPoint(x: x, y: y)) }
+            }
+            context.stroke(path, with: .color(Color(red: 0.25, green: 0.79, blue: 0.50)), lineWidth: 1.5)
         }
     }
 }
 
-// MARK: - Metal-Accelerated Procedural Glitch Ghost Companion
+// MARK: - Info Chip Components
+struct InfoChip: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.system(size: 8.5, weight: .bold))
+                .foregroundColor(Color(white: 0.5))
+            Text(value)
+                .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                .foregroundColor(.white)
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.white.opacity(0.04))
+        .cornerRadius(8)
+    }
+}
+
+struct InfoChipWithAction: View {
+    let title: String
+    let value: String
+    let actionLabel: String
+    let actionColor: Color
+    let action: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.system(size: 8.5, weight: .bold))
+                .foregroundColor(Color(white: 0.5))
+            HStack(spacing: 4) {
+                Text(value)
+                    .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                    .foregroundColor(.white)
+                Spacer()
+                Button(action: action) {
+                    Text(actionLabel)
+                        .font(.system(size: 8.5, weight: .bold))
+                        .foregroundColor(actionColor)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(actionColor.opacity(0.15))
+                        .cornerRadius(4)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.white.opacity(0.04))
+        .cornerRadius(8)
+    }
+}
+
+// MARK: - Threshold Slider Row
+struct ThresholdRow: View {
+    let label: String
+    @Binding var value: Double
+    let unit: String
+    let min: Double
+    let max: Double
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            HStack {
+                Text(label)
+                    .font(.system(size: 10))
+                    .foregroundColor(Color(white: 0.7))
+                Spacer()
+                Text(String(format: "%.0f %@", value, unit))
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundColor(.white)
+            }
+            Slider(value: $value, in: min...max)
+        }
+    }
+}
+
+// MARK: - Metal-Accelerated Procedural Glitch Ghost Companion with Real Mouse Eye-Tracking
 public struct GlitchGhostCanvas: View {
     public let tier: GhostExpressionTier
     public let isPetted: Bool
@@ -410,7 +662,7 @@ public struct GlitchGhostCanvas: View {
                 let w = size.width
                 let h = size.height
                 let cx = w / 2
-                
+
                 // Gentle floating bob
                 let floatY = sin(t * 2.3) * 3.5
                 let cy = h * 0.46 + floatY
@@ -420,10 +672,22 @@ public struct GlitchGhostCanvas: View {
                 if tier == .panic { jx = CGFloat(sin(t * 35.0)) * 2.0 }
                 if tier == .dead  { jx = CGFloat(sin(t * 50.0)) * 3.0 }
 
-                // Ghost geometry: compact size
+                // Ghost geometry: sleek compact size
                 let bw: CGFloat = 20
                 let bh: CGFloat = 34
                 let top: CGFloat = cy - bh * 0.5
+
+                // ── Global Mouse Cursor Eye-Tracking ───────────────────
+                let mouse = NSEvent.mouseLocation
+                let screenWidth = NSScreen.main?.frame.width ?? 1440
+                let screenHeight = NSScreen.main?.frame.height ?? 900
+                // Center of notch is at top middle of primary display
+                let notchCenterX = screenWidth / 2.0
+                let notchCenterY = screenHeight - 40.0
+                let rawDx = (mouse.x - notchCenterX) / 320.0
+                let rawDy = (notchCenterY - mouse.y) / 280.0
+                let eyeOffsetX = max(-2.4, min(2.4, rawDx * 2.4))
+                let eyeOffsetY = max(-1.8, min(1.8, rawDy * 1.8))
 
                 // ── Ambient Glow ──────────────────────────────────────
                 let glowColor: Color
@@ -489,7 +753,7 @@ public struct GlitchGhostCanvas: View {
                 context.fill(Path(roundedRect: screenRect, cornerRadius: 5), with: .color(Color(red: 0.05, green: 0.07, blue: 0.12)))
                 context.stroke(Path(roundedRect: screenRect, cornerRadius: 5), with: .color(Color(white: 0.35)), lineWidth: 0.8)
 
-                // ── LCD Visor Facial Expressions ─────────────────────
+                // ── LCD Visor Facial Expressions with Cursor Eye-Tracking ──
                 let ecx = sx + sw / 2
                 let ecy = sy + sh / 2
                 let es: CGFloat = 7.5
@@ -497,19 +761,19 @@ public struct GlitchGhostCanvas: View {
                 if isPetted {
                     // Joyful blushing eyes
                     context.stroke(
-                        crescentEye(center: CGPoint(x: ecx - es, y: ecy)),
+                        crescentEye(center: CGPoint(x: ecx - es + eyeOffsetX * 0.4, y: ecy + eyeOffsetY * 0.4)),
                         with: .color(Color(red: 0.92, green: 0.28, blue: 0.60)),
                         lineWidth: 1.6
                     )
                     context.stroke(
-                        crescentEye(center: CGPoint(x: ecx + es, y: ecy)),
+                        crescentEye(center: CGPoint(x: ecx + es + eyeOffsetX * 0.4, y: ecy + eyeOffsetY * 0.4)),
                         with: .color(Color(red: 0.92, green: 0.28, blue: 0.60)),
                         lineWidth: 1.6
                     )
                 } else {
                     switch tier {
                     case .sleep:
-                        // Crescent sleeping eyes
+                        // Crescent sleeping eyes + drifting Z
                         context.stroke(
                             crescentEye(center: CGPoint(x: ecx - es, y: ecy + 1)),
                             with: .color(Color(red: 0.38, green: 0.58, blue: 0.88)),
@@ -522,28 +786,37 @@ public struct GlitchGhostCanvas: View {
                         )
 
                     case .happy:
-                        // Emerald green dot eyes
-                        let eyeL = CGRect(x: ecx - es - 2, y: ecy - 2, width: 4, height: 4)
-                        let eyeR = CGRect(x: ecx + es - 2, y: ecy - 2, width: 4, height: 4)
+                        // Emerald green dot eyes with real cursor eye-tracking + catchlights
+                        let eyeL = CGRect(x: ecx - es - 2 + eyeOffsetX, y: ecy - 2 + eyeOffsetY, width: 4.2, height: 4.2)
+                        let eyeR = CGRect(x: ecx + es - 2 + eyeOffsetX, y: ecy - 2 + eyeOffsetY, width: 4.2, height: 4.2)
                         context.fill(Path(ellipseIn: eyeL), with: .color(Color(red: 0.25, green: 0.79, blue: 0.50)))
                         context.fill(Path(ellipseIn: eyeR), with: .color(Color(red: 0.25, green: 0.79, blue: 0.50)))
+                        // White catchlights
+                        let clL = CGRect(x: ecx - es - 1 + eyeOffsetX, y: ecy - 1.5 + eyeOffsetY, width: 1.4, height: 1.4)
+                        let clR = CGRect(x: ecx + es - 1 + eyeOffsetX, y: ecy - 1.5 + eyeOffsetY, width: 1.4, height: 1.4)
+                        context.fill(Path(ellipseIn: clL), with: .color(.white))
+                        context.fill(Path(ellipseIn: clR), with: .color(.white))
 
                     case .focus:
-                        // Electric blue eyes
-                        let eyeL = CGRect(x: ecx - es - 2, y: ecy - 2, width: 4, height: 4)
-                        let eyeR = CGRect(x: ecx + es - 2, y: ecy - 2, width: 4, height: 4)
+                        // Electric blue eyes with cursor tracking
+                        let eyeL = CGRect(x: ecx - es - 2 + eyeOffsetX, y: ecy - 2 + eyeOffsetY, width: 4.2, height: 4.2)
+                        let eyeR = CGRect(x: ecx + es - 2 + eyeOffsetX, y: ecy - 2 + eyeOffsetY, width: 4.2, height: 4.2)
                         context.fill(Path(ellipseIn: eyeL), with: .color(Color(red: 0.35, green: 0.65, blue: 1.0)))
                         context.fill(Path(ellipseIn: eyeR), with: .color(Color(red: 0.35, green: 0.65, blue: 1.0)))
+                        let clL = CGRect(x: ecx - es - 1 + eyeOffsetX, y: ecy - 1.5 + eyeOffsetY, width: 1.4, height: 1.4)
+                        let clR = CGRect(x: ecx + es - 1 + eyeOffsetX, y: ecy - 1.5 + eyeOffsetY, width: 1.4, height: 1.4)
+                        context.fill(Path(ellipseIn: clL), with: .color(.white))
+                        context.fill(Path(ellipseIn: clR), with: .color(.white))
 
                     case .strain:
                         // Downward arc eyes + sweat drop
                         context.stroke(
-                            downArcEye(center: CGPoint(x: ecx - es, y: ecy)),
+                            downArcEye(center: CGPoint(x: ecx - es + eyeOffsetX * 0.5, y: ecy + eyeOffsetY * 0.5)),
                             with: .color(Color(red: 0.98, green: 0.65, blue: 0.22)),
                             lineWidth: 1.5
                         )
                         context.stroke(
-                            downArcEye(center: CGPoint(x: ecx + es, y: ecy)),
+                            downArcEye(center: CGPoint(x: ecx + es + eyeOffsetX * 0.5, y: ecy + eyeOffsetY * 0.5)),
                             with: .color(Color(red: 0.98, green: 0.65, blue: 0.22)),
                             lineWidth: 1.5
                         )
