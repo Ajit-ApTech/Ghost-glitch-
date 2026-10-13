@@ -25,31 +25,56 @@ struct PetParticle: Identifiable {
     var progress: CGFloat = 0.0
 }
 
+// MARK: - Shared App Settings (Synced across Menu Bar, Notch Companion & HUD Popover)
+public class AppSettings: ObservableObject {
+    public static let shared = AppSettings()
+
+    @Published public var reactionMode: ReactionMode {
+        didSet {
+            UserDefaults.standard.set(reactionMode == .cpu ? "cpu" : "network", forKey: "notch_reaction_mode")
+        }
+    }
+
+    @Published public var useBits: Bool {
+        didSet {
+            UserDefaults.standard.set(useBits, forKey: "notch_use_bits")
+        }
+    }
+
+    public init() {
+        let savedMode = UserDefaults.standard.string(forKey: "notch_reaction_mode") ?? "network"
+        self.reactionMode = savedMode == "cpu" ? .cpu : .network
+        self.useBits = UserDefaults.standard.bool(forKey: "notch_use_bits")
+    }
+}
+
 // MARK: - 1. Notch Bar View (Strictly 34pt tall, snug against M4 camera notch)
 public struct NotchBarView: View {
     @ObservedObject var networkMonitor: NetworkMonitor
     @ObservedObject var cpuMonitor: CPUMonitor
+    @ObservedObject var appSettings: AppSettings = .shared
     let onToggleHUD: () -> Void
 
-    @State private var useBits = false
     @State private var speedHistory: [Double] = Array(repeating: 0, count: 20)
 
     public init(
         networkMonitor: NetworkMonitor,
         cpuMonitor: CPUMonitor,
+        appSettings: AppSettings = .shared,
         onToggleHUD: @escaping () -> Void
     ) {
         self.networkMonitor = networkMonitor
         self.cpuMonitor = cpuMonitor
+        self.appSettings = appSettings
         self.onToggleHUD = onToggleHUD
     }
 
     public var body: some View {
         HStack(spacing: 0) {
             // ── Left Wing (156pt): Stacked Speeds + Green Network Sparkline hugging notch ──
-            HStack(spacing: 6) {
-                let d = formatSpeed(networkMonitor.downloadSpeed, useBits: useBits)
-                let u = formatSpeed(networkMonitor.uploadSpeed, useBits: useBits)
+            HStack(spacing: 8) {
+                let d = formatSpeed(networkMonitor.downloadSpeed, useBits: appSettings.useBits)
+                let u = formatSpeed(networkMonitor.uploadSpeed, useBits: appSettings.useBits)
 
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 3) {
@@ -77,15 +102,15 @@ public struct NotchBarView: View {
                             .font(.system(size: 8.5, weight: .semibold, design: .monospaced))
                     }
                 }
+                .fixedSize()
 
-                Spacer()
-
-                // Live Green Network Speed Sparkline — flows right into the left edge of the notch!
+                // Live Green Network Speed Sparkline — expands to fill the wing and touches the notch!
                 MiniSparklineCanvas(data: speedHistory, color: Color(red: 0.25, green: 0.79, blue: 0.50))
-                    .frame(width: 58, height: 16)
+                    .frame(height: 16)
+                    .frame(maxWidth: .infinity)
             }
             .padding(.leading, 12)
-            .padding(.trailing, 4)
+            .padding(.trailing, 2)
             .frame(width: 156, alignment: .leading)
 
             // ── Snug Center Notch Cutout Gap (168pt for M4 MacBook Air camera bezel) ──
@@ -93,30 +118,30 @@ public struct NotchBarView: View {
                 .frame(width: 168)
 
             // ── Right Wing (156pt): Purple CPU Sparkline originating right from notch + Ping & CPU ──
-            HStack(spacing: 6) {
+            HStack(spacing: 8) {
                 // Live Purple CPU Usage Sparkline — starts right at the right edge of the notch!
                 MiniSparklineCanvas(data: cpuMonitor.cpuHistory, color: Color(red: 0.74, green: 0.55, blue: 0.98))
-                    .frame(width: 58, height: 16)
+                    .frame(height: 16)
+                    .frame(maxWidth: .infinity)
 
-                Spacer()
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(pingColor)
+                        .frame(width: 6, height: 6)
+                        .shadow(color: pingColor.opacity(0.8), radius: 3)
 
-                Circle()
-                    .fill(pingColor)
-                    .frame(width: 6, height: 6)
-                    .shadow(color: pingColor.opacity(0.8), radius: 3)
-
-                HStack(spacing: 2) {
-                    Text("CPU")
-                        .font(.system(size: 9.5, weight: .bold))
-                        .foregroundColor(Color(white: 0.6))
-                    Text("\(Int(cpuMonitor.cpuUsagePercentage))%")
-                        .foregroundColor(Color(red: 0.74, green: 0.55, blue: 0.98))
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    HStack(spacing: 2) {
+                        Text("CPU")
+                            .font(.system(size: 9.5, weight: .bold))
+                            .foregroundColor(Color(white: 0.6))
+                        Text("\(Int(cpuMonitor.cpuUsagePercentage))%")
+                            .foregroundColor(Color(red: 0.74, green: 0.55, blue: 0.98))
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    }
                 }
-                .lineLimit(1)
                 .fixedSize()
             }
-            .padding(.leading, 4)
+            .padding(.leading, 2)
             .padding(.trailing, 12)
             .frame(width: 156, alignment: .trailing)
         }
@@ -163,7 +188,7 @@ public struct NotchBarView: View {
 public struct GhostCompanionView: View {
     @ObservedObject var networkMonitor: NetworkMonitor
     @ObservedObject var cpuMonitor: CPUMonitor
-    let reactionMode: ReactionMode
+    @ObservedObject var appSettings: AppSettings = .shared
 
     @State private var isPetted = false
     @State private var particles: [PetParticle] = []
@@ -171,15 +196,15 @@ public struct GhostCompanionView: View {
     public init(
         networkMonitor: NetworkMonitor,
         cpuMonitor: CPUMonitor,
-        reactionMode: ReactionMode = .network
+        appSettings: AppSettings = .shared
     ) {
         self.networkMonitor = networkMonitor
         self.cpuMonitor = cpuMonitor
-        self.reactionMode = reactionMode
+        self.appSettings = appSettings
     }
 
     public var currentTier: GhostExpressionTier {
-        if reactionMode == .cpu {
+        if appSettings.reactionMode == .cpu {
             let cpu = cpuMonitor.cpuUsagePercentage
             if cpu >= 95 { return .dead }
             if cpu >= 85 { return .panic }
@@ -251,11 +276,10 @@ public struct GhostCompanionView: View {
 public struct NotchHUDView: View {
     @ObservedObject var networkMonitor: NetworkMonitor
     @ObservedObject var cpuMonitor: CPUMonitor
+    @ObservedObject var appSettings: AppSettings = .shared
     let onClose: () -> Void
 
     @State private var showSettings = false
-    @State private var useBits = false
-    @State private var reactionMode: ReactionMode = .network
     @State private var copiedIP = false
 
     @State private var threshSleep: Double  = 10.0
@@ -268,15 +292,17 @@ public struct NotchHUDView: View {
     public init(
         networkMonitor: NetworkMonitor,
         cpuMonitor: CPUMonitor,
+        appSettings: AppSettings = .shared,
         onClose: @escaping () -> Void
     ) {
         self.networkMonitor = networkMonitor
         self.cpuMonitor = cpuMonitor
+        self.appSettings = appSettings
         self.onClose = onClose
     }
 
     public var currentTier: GhostExpressionTier {
-        if reactionMode == .cpu {
+        if appSettings.reactionMode == .cpu {
             let cpu = cpuMonitor.cpuUsagePercentage
             if cpu >= 95 { return .dead }
             if cpu >= 85 { return .panic }
@@ -309,7 +335,7 @@ public struct NotchHUDView: View {
                         Text("Glitch · Notch Ghost")
                             .font(.system(size: 13, weight: .bold))
                             .foregroundColor(.white)
-                        Text("(\(reactionMode == .network ? "⚡ Net" : "🧠 CPU"))")
+                        Text("(\(appSettings.reactionMode == .network ? "⚡ Net" : "🧠 CPU"))")
                             .font(.system(size: 9.5, weight: .bold, design: .monospaced))
                             .foregroundColor(accentColor)
                     }
@@ -349,7 +375,7 @@ public struct NotchHUDView: View {
                         Text("Companion Reaction Source:")
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundColor(.white)
-                        Picker("", selection: $reactionMode) {
+                        Picker("", selection: $appSettings.reactionMode) {
                             Text("⚡ Internet Speed").tag(ReactionMode.network)
                             Text("🧠 CPU Load").tag(ReactionMode.cpu)
                         }
@@ -360,7 +386,7 @@ public struct NotchHUDView: View {
                         Text("Telemetry Unit Display:")
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundColor(.white)
-                        Picker("", selection: $useBits) {
+                        Picker("", selection: $appSettings.useBits) {
                             Text("Bytes (KB/s, MB/s)").tag(false)
                             Text("Bits (Kbps, Mbps)").tag(true)
                         }
@@ -380,10 +406,10 @@ public struct NotchHUDView: View {
             } else {
                 // Main Dashboard
                 HStack {
-                    let d = formatSpeed(networkMonitor.downloadSpeed, useBits: useBits)
-                    let u = formatSpeed(networkMonitor.uploadSpeed, useBits: useBits)
-                    let peakD = formatSpeed(networkMonitor.peakDownloadSpeed, useBits: useBits)
-                    let peakU = formatSpeed(networkMonitor.peakUploadSpeed, useBits: useBits)
+                    let d = formatSpeed(networkMonitor.downloadSpeed, useBits: appSettings.useBits)
+                    let u = formatSpeed(networkMonitor.uploadSpeed, useBits: appSettings.useBits)
+                    let peakD = formatSpeed(networkMonitor.peakDownloadSpeed, useBits: appSettings.useBits)
+                    let peakU = formatSpeed(networkMonitor.peakUploadSpeed, useBits: appSettings.useBits)
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text("DOWNLOAD SPEED")
@@ -454,8 +480,9 @@ public struct NotchHUDView: View {
 
                 // Monthly Data Quota Progress Bar
                 VStack(alignment: .leading, spacing: 5) {
-                    let totalGB = Double(networkMonitor.sessionBytesDownloaded + networkMonitor.sessionBytesUploaded) / (1024 * 1024 * 1024)
-                    let pct = min(1.0, totalGB / quotaLimitGB)
+                    let totalBytes = Double(networkMonitor.sessionBytesDownloaded) + Double(networkMonitor.sessionBytesUploaded)
+                    let totalGB = totalBytes / (1024.0 * 1024.0 * 1024.0)
+                    let pct = min(1.0, totalGB / max(1.0, quotaLimitGB))
 
                     HStack {
                         Text("SESSION / MONTHLY DATA")
@@ -501,7 +528,7 @@ public struct NotchHUDView: View {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copiedIP = false }
                     }
 
-                    let sessMb = Double(networkMonitor.sessionBytesDownloaded) / (1024 * 1024)
+                    let sessMb = Double(networkMonitor.sessionBytesDownloaded) / (1024.0 * 1024.0)
                     InfoChip(
                         title: "SESSION",
                         value: sessMb > 1024 ? String(format: "%.2f GB", sessMb / 1024) : String(format: "%.0f MB", sessMb)
@@ -531,8 +558,8 @@ public struct NotchHUDView: View {
                     .buttonStyle(.plain)
                     .disabled(networkMonitor.isSpeedtesting)
 
-                    Button(action: { useBits.toggle() }) {
-                        Text(useBits ? "⇄ to MB/s" : "⇄ to Mbps")
+                    Button(action: { appSettings.useBits.toggle() }) {
+                        Text(appSettings.useBits ? "⇄ to MB/s" : "⇄ to Mbps")
                             .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
                             .foregroundColor(Color(white: 0.8))
                             .padding(.horizontal, 8)
@@ -585,7 +612,7 @@ public struct NotchHUDView: View {
     }
 
     private var tierDescription: String {
-        if reactionMode == .cpu {
+        if appSettings.reactionMode == .cpu {
             switch currentTier {
             case .sleep:  return "CPU Idle (0–15%) · Napping peacefully"
             case .happy:  return "CPU Light (16–40%) · Cruising smoothly"

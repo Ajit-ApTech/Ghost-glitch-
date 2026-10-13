@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     let networkMonitor = NetworkMonitor()
     let cpuMonitor = CPUMonitor()
+    let appSettings = AppSettings.shared
 
     let barWidth: CGFloat = 480
     let barHeight: CGFloat = 34
@@ -46,6 +47,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let barView = NotchBarView(
             networkMonitor: networkMonitor,
             cpuMonitor: cpuMonitor,
+            appSettings: appSettings,
             onToggleHUD: { [weak self] in
                 self?.toggleHUD()
             }
@@ -79,7 +81,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let ghostView = GhostCompanionView(
             networkMonitor: networkMonitor,
-            cpuMonitor: cpuMonitor
+            cpuMonitor: cpuMonitor,
+            appSettings: appSettings
         )
         let hostingView = NSHostingView(rootView: ghostView)
 
@@ -111,6 +114,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let hudView = NotchHUDView(
             networkMonitor: networkMonitor,
             cpuMonitor: cpuMonitor,
+            appSettings: appSettings,
             onClose: { [weak self] in
                 self?.closeHUD()
             }
