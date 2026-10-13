@@ -6,42 +6,57 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let networkMonitor = NetworkMonitor()
     let cpuMonitor = CPUMonitor()
 
+    let panelWidth: CGFloat = 430
+    let panelHeight: CGFloat = 480
+
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.setActivationPolicy(.accessory) // Hides from Dock, behaves as menu bar companion
+        NSApp.setActivationPolicy(.accessory) // Hides from Dock, behaves as sleek menu bar companion
 
         let notchView = NotchView(networkMonitor: networkMonitor, cpuMonitor: cpuMonitor)
         let hostingView = NSHostingView(rootView: notchView)
 
         // Create borderless floating panel
         panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 380, height: 260),
+            contentRect: NSRect(x: 0, y: 0, width: panelWidth, height: panelHeight),
             styleMask: [.nonactivatingPanel, .borderless],
             backing: .buffered,
             defer: false
         )
 
         panel.isFloatingPanel = true
-        panel.level = .floating
+        panel.level = .statusBar // Floats on top of all windows and menu bar
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.backgroundColor = .clear
         panel.isOpaque = false
         panel.hasShadow = false
         panel.contentView = hostingView
+        panel.ignoresMouseEvents = false
 
         positionPanelAtNotch()
         panel.orderFrontRegardless()
+
+        // Re-align if display configuration changes
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(screenParametersChanged),
+            name: NSApplication.didChangeScreenParametersNotification,
+            object: nil
+        )
+    }
+
+    @objc private func screenParametersChanged() {
+        positionPanelAtNotch()
     }
 
     private func positionPanelAtNotch() {
         guard let screen = NSScreen.main else { return }
         let screenFrame = screen.frame
 
-        // Calculate notch or top center positioning
-        let panelWidth: CGFloat = 380
+        // Center horizontally on display, align flush to the top edge of the screen
         let xPos = screenFrame.origin.x + (screenFrame.width - panelWidth) / 2
-        let yPos = screenFrame.origin.y + screenFrame.height - 40
+        let yPos = screenFrame.origin.y + screenFrame.height - panelHeight
 
-        panel.setFrameOrigin(NSPoint(x: xPos, y: yPos))
+        panel.setFrame(NSRect(x: xPos, y: yPos, width: panelWidth, height: panelHeight), display: true)
     }
 }
 
