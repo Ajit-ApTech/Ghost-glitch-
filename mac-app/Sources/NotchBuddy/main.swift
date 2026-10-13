@@ -1,8 +1,46 @@
 import AppKit
 import SwiftUI
 
+// Shape-Aware Hosting View: Intelligently accepts clicks ONLY on the actual visible bar and Glitch,
+// while letting all clicks on the empty space (where Chrome tabs are) pass straight through to background apps!
+final class ShapeHitTestHostingView<Content: View>: NSHostingView<Content> {
+    var isExpanded: Bool = false
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        let h = bounds.height
+        let w = bounds.width
+
+        // 1. Top Notch Bar (Full 520pt width, top 36pt flush with menu bar / notch)
+        if point.y >= h - 36 && point.y <= h && point.x >= 0 && point.x <= w {
+            return super.hitTest(point)
+        }
+
+        // 2. Glitch Ghost (Centered 80pt wide below notch bar)
+        let ghostLeft = (w - 84) / 2
+        let ghostRight = (w + 84) / 2
+        let ghostBottom = h - 110
+        if !isExpanded && point.x >= ghostLeft && point.x <= ghostRight && point.y >= ghostBottom && point.y < h - 36 {
+            return super.hitTest(point)
+        }
+
+        // 3. Expanded HUD Popover (When opened)
+        if isExpanded {
+            let hudLeft = (w - 446) / 2
+            let hudRight = (w + 446) / 2
+            if point.x >= hudLeft && point.x <= hudRight && point.y >= 0 && point.y < h - 36 {
+                return super.hitTest(point)
+            }
+        }
+
+        // 4. Everything else (including the spaces to the left and right of Glitch where Chrome tabs sit)
+        // returns nil, which AppKit translates into instant passthrough clicks to underlying windows!
+        return nil
+    }
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate {
     var panel: NSPanel!
+    var hostingView: ShapeHitTestHostingView<NotchView>!
     let networkMonitor = NetworkMonitor()
     let cpuMonitor = CPUMonitor()
 
@@ -19,7 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.setExpanded(expanded)
             }
         )
-        let hostingView = NSHostingView(rootView: notchView)
+        hostingView = ShapeHitTestHostingView(rootView: notchView)
 
         // Collapsed height (110pt) covers the notch bar (34pt) and companion (74pt) only
         let initialHeight: CGFloat = 110
@@ -53,6 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func setExpanded(_ expanded: Bool) {
         self.isExpanded = expanded
+        hostingView?.isExpanded = expanded
         let targetHeight: CGFloat = expanded ? 580 : 110
         positionPanelAtNotch(height: targetHeight)
     }
