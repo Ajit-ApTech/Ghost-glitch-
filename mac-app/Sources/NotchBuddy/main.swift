@@ -1,86 +1,35 @@
 import AppKit
 import SwiftUI
 
-// Shape-Aware Hosting View: Intelligently accepts clicks ONLY on the actual visible bar and Glitch,
-// while letting all clicks on the empty space (where Chrome tabs are) pass straight through to background apps!
-final class ShapeHitTestHostingView<Content: View>: NSHostingView<Content> {
-    var isExpanded: Bool = false
-
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        let h = bounds.height
-        let w = bounds.width
-
-        // 1. Top Notch Bar (Full 520pt width, top 36pt flush with menu bar / notch)
-        if point.y >= h - 36 && point.y <= h && point.x >= 0 && point.x <= w {
-            return super.hitTest(point)
-        }
-
-        // 2. Glitch Ghost (Centered 80pt wide below notch bar)
-        let ghostLeft = (w - 84) / 2
-        let ghostRight = (w + 84) / 2
-        let ghostBottom = h - 110
-        if !isExpanded && point.x >= ghostLeft && point.x <= ghostRight && point.y >= ghostBottom && point.y < h - 36 {
-            return super.hitTest(point)
-        }
-
-        // 3. Expanded HUD Popover (When opened)
-        if isExpanded {
-            let hudLeft = (w - 446) / 2
-            let hudRight = (w + 446) / 2
-            if point.x >= hudLeft && point.x <= hudRight && point.y >= 0 && point.y < h - 36 {
-                return super.hitTest(point)
-            }
-        }
-
-        // 4. Everything else (including the spaces to the left and right of Glitch where Chrome tabs sit)
-        // returns nil, which AppKit translates into instant passthrough clicks to underlying windows!
-        return nil
-    }
-}
-
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    var panel: NSPanel!
-    var hostingView: ShapeHitTestHostingView<NotchView>!
+    var barPanel: NSPanel!
+    var ghostPanel: NSPanel!
+    var hudPanel: NSPanel!
+
     let networkMonitor = NetworkMonitor()
     let cpuMonitor = CPUMonitor()
 
-    let panelWidth: CGFloat = 520
-    var isExpanded: Bool = false
+    let barWidth: CGFloat = 480
+    let barHeight: CGFloat = 34
+
+    let ghostWidth: CGFloat = 80
+    let ghostHeight: CGFloat = 74
+
+    let hudWidth: CGFloat = 440
+    let hudHeight: CGFloat = 480
+
+    var isHUDOpen = false
+    var globalEventMonitor: Any?
+    var localEventMonitor: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.setActivationPolicy(.accessory) // Hides from Dock, behaves as sleek menu bar companion
+        NSApp.setActivationPolicy(.accessory) // Hides from Dock, behaves as menu bar companion
 
-        let notchView = NotchView(
-            networkMonitor: networkMonitor,
-            cpuMonitor: cpuMonitor,
-            onToggleExpand: { [weak self] expanded in
-                self?.setExpanded(expanded)
-            }
-        )
-        hostingView = ShapeHitTestHostingView(rootView: notchView)
+        setupBarPanel()
+        setupGhostPanel()
+        setupHUDPanel()
 
-        // Collapsed height (110pt) covers the notch bar (34pt) and companion (74pt) only
-        let initialHeight: CGFloat = 110
-        panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: panelWidth, height: initialHeight),
-            styleMask: [.nonactivatingPanel, .borderless],
-            backing: .buffered,
-            defer: false
-        )
-
-        panel.isFloatingPanel = true
-        panel.level = .statusBar // Floats on top of all windows and menu bar
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        panel.backgroundColor = .clear
-        panel.isOpaque = false
-        panel.hasShadow = false
-        panel.contentView = hostingView
-        panel.ignoresMouseEvents = false
-
-        positionPanelAtNotch(height: initialHeight)
-        panel.orderFrontRegardless()
-
-        // Re-align if display configuration changes
+        // Re-align panels on screen configuration changes
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(screenParametersChanged),
@@ -89,27 +38,176 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
-    func setExpanded(_ expanded: Bool) {
-        self.isExpanded = expanded
-        hostingView?.isExpanded = expanded
-        let targetHeight: CGFloat = expanded ? 580 : 110
-        positionPanelAtNotch(height: targetHeight)
+    // ── 1. Top Notch Bar Panel (Strictly 34pt tall, never covers Chrome tabs) ──
+    private func setupBarPanel() {
+        guard let screen = NSScreen.main else { return }
+        let sf = screen.frame
+
+        let barView = NotchBarView(
+            networkMonitor: networkMonitor,
+            cpuMonitor: cpuMonitor,
+            onToggleHUD: { [weak self] in
+                self?.toggleHUD()
+            }
+        )
+        let hostingView = NSHostingView(rootView: barView)
+
+        let xPos = sf.origin.x + (sf.width - barWidth) / 2
+        let yPos = sf.origin.y + sf.height - barHeight
+
+        barPanel = NSPanel(
+            contentRect: NSRect(x: xPos, y: yPos, width: barWidth, height: barHeight),
+            styleMask: [.nonactivatingPanel, .borderless],
+            backing: .buffered,
+            defer: false
+        )
+        barPanel.isFloatingPanel = true
+        barPanel.level = .statusBar
+        barPanel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        barPanel.backgroundColor = .clear
+        barPanel.isOpaque = false
+        barPanel.hasShadow = false
+        barPanel.contentView = hostingView
+
+        barPanel.orderFrontRegardless()
+    }
+
+    // ── 2. Glitch Companion Panel (Strictly 80pt wide, leaves all Chrome tabs 100% open) ──
+    private func setupGhostPanel() {
+        guard let screen = NSScreen.main else { return }
+        let sf = screen.frame
+
+        let ghostView = GhostCompanionView(
+            networkMonitor: networkMonitor,
+            cpuMonitor: cpuMonitor
+        )
+        let hostingView = NSHostingView(rootView: ghostView)
+
+        let xPos = sf.origin.x + (sf.width - ghostWidth) / 2
+        let yPos = sf.origin.y + sf.height - barHeight - ghostHeight
+
+        ghostPanel = NSPanel(
+            contentRect: NSRect(x: xPos, y: yPos, width: ghostWidth, height: ghostHeight),
+            styleMask: [.nonactivatingPanel, .borderless],
+            backing: .buffered,
+            defer: false
+        )
+        ghostPanel.isFloatingPanel = true
+        ghostPanel.level = .statusBar
+        ghostPanel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        ghostPanel.backgroundColor = .clear
+        ghostPanel.isOpaque = false
+        ghostPanel.hasShadow = false
+        ghostPanel.contentView = hostingView
+
+        ghostPanel.orderFrontRegardless()
+    }
+
+    // ── 3. Expanded HUD Dropdown Panel (Only visible when HUD is open) ──
+    private func setupHUDPanel() {
+        guard let screen = NSScreen.main else { return }
+        let sf = screen.frame
+
+        let hudView = NotchHUDView(
+            networkMonitor: networkMonitor,
+            cpuMonitor: cpuMonitor,
+            onClose: { [weak self] in
+                self?.closeHUD()
+            }
+        )
+        let hostingView = NSHostingView(rootView: hudView)
+
+        let xPos = sf.origin.x + (sf.width - hudWidth) / 2
+        let yPos = sf.origin.y + sf.height - barHeight - hudHeight
+
+        hudPanel = NSPanel(
+            contentRect: NSRect(x: xPos, y: yPos, width: hudWidth, height: hudHeight),
+            styleMask: [.nonactivatingPanel, .borderless],
+            backing: .buffered,
+            defer: false
+        )
+        hudPanel.isFloatingPanel = true
+        hudPanel.level = .statusBar
+        hudPanel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        hudPanel.backgroundColor = .clear
+        hudPanel.isOpaque = false
+        hudPanel.hasShadow = false
+        hudPanel.contentView = hostingView
+    }
+
+    // ── HUD Toggle & Click-Outside Auto-Close ──
+    func toggleHUD() {
+        if isHUDOpen {
+            closeHUD()
+        } else {
+            openHUD()
+        }
+    }
+
+    func openHUD() {
+        isHUDOpen = true
+        alignPanels()
+        ghostPanel.orderOut(nil) // Glitch is displayed in the HUD badge
+        hudPanel.orderFrontRegardless()
+
+        // Auto-close when clicking outside the HUD dropdown!
+        globalEventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+            guard let self = self, self.isHUDOpen else { return }
+            let clickLoc = NSEvent.mouseLocation
+            // If click is outside the HUD panel frame and outside the notch bar, close!
+            if !self.hudPanel.frame.contains(clickLoc) && !self.barPanel.frame.contains(clickLoc) {
+                DispatchQueue.main.async {
+                    self.closeHUD()
+                }
+            }
+        }
+
+        localEventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+            guard let self = self, self.isHUDOpen else { return event }
+            let clickLoc = NSEvent.mouseLocation
+            if !self.hudPanel.frame.contains(clickLoc) && !self.barPanel.frame.contains(clickLoc) {
+                DispatchQueue.main.async {
+                    self.closeHUD()
+                }
+            }
+            return event
+        }
+    }
+
+    func closeHUD() {
+        isHUDOpen = false
+        hudPanel.orderOut(nil)
+        ghostPanel.orderFrontRegardless()
+
+        if let gem = globalEventMonitor {
+            NSEvent.removeMonitor(gem)
+            globalEventMonitor = nil
+        }
+        if let lem = localEventMonitor {
+            NSEvent.removeMonitor(lem)
+            localEventMonitor = nil
+        }
     }
 
     @objc private func screenParametersChanged() {
-        let currentHeight: CGFloat = isExpanded ? 580 : 110
-        positionPanelAtNotch(height: currentHeight)
+        alignPanels()
     }
 
-    private func positionPanelAtNotch(height: CGFloat) {
+    private func alignPanels() {
         guard let screen = NSScreen.main else { return }
-        let screenFrame = screen.frame
+        let sf = screen.frame
 
-        // Center horizontally on display, align flush to top edge
-        let xPos = screenFrame.origin.x + (screenFrame.width - panelWidth) / 2
-        let yPos = screenFrame.origin.y + screenFrame.height - height
+        let barX = sf.origin.x + (sf.width - barWidth) / 2
+        let barY = sf.origin.y + sf.height - barHeight
+        barPanel.setFrame(NSRect(x: barX, y: barY, width: barWidth, height: barHeight), display: true)
 
-        panel.setFrame(NSRect(x: xPos, y: yPos, width: panelWidth, height: height), display: true)
+        let ghostX = sf.origin.x + (sf.width - ghostWidth) / 2
+        let ghostY = sf.origin.y + sf.height - barHeight - ghostHeight
+        ghostPanel.setFrame(NSRect(x: ghostX, y: ghostY, width: ghostWidth, height: ghostHeight), display: true)
+
+        let hudX = sf.origin.x + (sf.width - hudWidth) / 2
+        let hudY = sf.origin.y + sf.height - barHeight - hudHeight
+        hudPanel.setFrame(NSRect(x: hudX, y: hudY, width: hudWidth, height: hudHeight), display: true)
     }
 }
 
