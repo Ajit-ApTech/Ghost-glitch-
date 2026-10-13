@@ -13,3 +13,4 @@ DerivedData/
 
 # Logs & temp
 *.log
+*.app/

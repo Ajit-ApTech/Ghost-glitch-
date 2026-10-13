@@ -79,14 +79,21 @@ Then visit **`http://localhost:8088`** in your browser.
 
 ---
 
-### Option 2: Running the Native macOS App (macOS 13+ / macOS 14+)
-Navigate to the `mac-app` folder:
-```bash
-cd mac-app
+### Option 2: Installing the Native macOS App to `/Applications`
 
-# Build and run with Swift Package Manager:
-swift build
-swift run
+Run the included 1-click installer:
+```bash
+./install-app.sh
+```
+This builds an optimized production release and installs **`Notch Buddy.app`** directly into your **`/Applications`** folder:
+- **Spotlight Launch**: Press `Cmd + Space`, type `Notch Buddy`, and press Enter.
+- **Launchpad**: Available directly in your Applications list.
+- **Launch on Startup / Login**:
+  Open **System Settings > General > Login Items**, click `+`, and select **Notch Buddy** from `/Applications`.
+
+You can also run it directly in developer mode via:
+```bash
+./start-notch-buddy.command
 ```
 
 ---
