@@ -4,6 +4,7 @@ import Darwin
 /// Zero-lag CPU usage monitoring using Mach Kernel host_processor_info()
 public final class CPUMonitor: ObservableObject {
     @Published public private(set) var cpuUsagePercentage: Double = 0.0
+    @Published public private(set) var cpuHistory: [Double] = Array(repeating: 15.0, count: 20)
 
     private var previousCpuInfo: processor_info_array_t?
     private var previousNumCpuInfo: mach_msg_type_number_t = 0
@@ -83,7 +84,12 @@ public final class CPUMonitor: ObservableObject {
         let usage = total > 0 ? (Double(inUse) / Double(total)) * 100.0 : 0.0
 
         DispatchQueue.main.async { [weak self] in
-            self?.cpuUsagePercentage = usage
+            guard let self = self else { return }
+            self.cpuUsagePercentage = usage
+            self.cpuHistory.append(usage)
+            if self.cpuHistory.count > 20 {
+                self.cpuHistory.removeFirst()
+            }
         }
     }
 }

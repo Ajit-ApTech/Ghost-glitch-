@@ -29,19 +29,16 @@ struct PetParticle: Identifiable {
 public struct NotchView: View {
     @ObservedObject var networkMonitor: NetworkMonitor
     @ObservedObject var cpuMonitor: CPUMonitor
+    let onToggleExpand: (Bool) -> Void
 
     @State private var isExpanded = false
     @State private var showSettings = false
     @State private var isPetted = false
     @State private var useBits = false
     @State private var reactionMode: ReactionMode = .network
-    @State private var speedHistory: [Double] = Array(repeating: 0, count: 24)
+    @State private var speedHistory: [Double] = Array(repeating: 0, count: 20)
     @State private var particles: [PetParticle] = []
     @State private var copiedIP = false
-
-    // Movable Companion Position Offset
-    @State private var ghostOffset: CGSize = .zero
-    @GestureState private var dragTranslation: CGSize = .zero
 
     // Configurable thresholds (in KB/s for network, % for CPU)
     @State private var threshSleep: Double  = 10.0
@@ -51,9 +48,14 @@ public struct NotchView: View {
     @State private var threshPanic: Double  = 10240.0
     @State private var quotaLimitGB: Double = 100.0
 
-    public init(networkMonitor: NetworkMonitor, cpuMonitor: CPUMonitor) {
+    public init(
+        networkMonitor: NetworkMonitor,
+        cpuMonitor: CPUMonitor,
+        onToggleExpand: @escaping (Bool) -> Void = { _ in }
+    ) {
         self.networkMonitor = networkMonitor
         self.cpuMonitor = cpuMonitor
+        self.onToggleExpand = onToggleExpand
     }
 
     public var currentTier: GhostExpressionTier {
@@ -80,8 +82,8 @@ public struct NotchView: View {
         VStack(spacing: 0) {
             // ── Notch Bar & Wing Telemetry (Symmetrical 520pt: 160pt Left + 200pt Cutout + 160pt Right) ──
             HStack(spacing: 0) {
-                // Left Wing (160pt): Clean Stacked Speeds
-                HStack(spacing: 4) {
+                // Left Wing (160pt): Stacked Speeds + Green Network Sparkline
+                HStack(spacing: 6) {
                     let d = formatSpeed(networkMonitor.downloadSpeed, useBits: useBits)
                     let u = formatSpeed(networkMonitor.uploadSpeed, useBits: useBits)
 
@@ -93,7 +95,7 @@ public struct NotchView: View {
                                 .font(.system(size: 10))
                             Text(d.val)
                                 .foregroundColor(.white)
-                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                .font(.system(size: 10.5, weight: .bold, design: .monospaced))
                             Text(d.unit)
                                 .foregroundColor(Color(white: 0.65))
                                 .font(.system(size: 9, weight: .semibold, design: .monospaced))
@@ -105,12 +107,16 @@ public struct NotchView: View {
                                 .font(.system(size: 10))
                             Text(u.val)
                                 .foregroundColor(.white)
-                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                .font(.system(size: 10.5, weight: .bold, design: .monospaced))
                             Text(u.unit)
                                 .foregroundColor(Color(white: 0.65))
                                 .font(.system(size: 9, weight: .semibold, design: .monospaced))
                         }
                     }
+
+                    // Live Green Network Speed Sparkline
+                    MiniSparklineCanvas(data: speedHistory, color: Color(red: 0.25, green: 0.79, blue: 0.50))
+                        .frame(width: 52, height: 16)
                 }
                 .padding(.leading, 12)
                 .frame(width: 160, alignment: .leading)
@@ -119,18 +125,18 @@ public struct NotchView: View {
                 Spacer()
                     .frame(width: 200)
 
-                // Right Wing (160pt): Extended Speed Graph + Latency Ping & CPU Badge
-                HStack(spacing: 7) {
-                    // Extended live speed graph
-                    MiniSparklineCanvas(data: speedHistory)
-                        .frame(width: 72, height: 16)
+                // Right Wing (160pt): Purple CPU Sparkline + Latency Ping & CPU Badge
+                HStack(spacing: 6) {
+                    // Live Purple CPU Usage Sparkline
+                    MiniSparklineCanvas(data: cpuMonitor.cpuHistory, color: Color(red: 0.74, green: 0.55, blue: 0.98))
+                        .frame(width: 52, height: 16)
 
                     Circle()
                         .fill(pingColor)
                         .frame(width: 6, height: 6)
                         .shadow(color: pingColor.opacity(0.8), radius: 3)
 
-                    HStack(spacing: 3) {
+                    HStack(spacing: 2) {
                         Text("CPU")
                             .font(.system(size: 9.5, weight: .bold))
                             .foregroundColor(Color(white: 0.6))
@@ -151,15 +157,13 @@ public struct NotchView: View {
             .onTapGesture {
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.78)) {
                     isExpanded.toggle()
+                    onToggleExpand(isExpanded)
                 }
             }
 
-            // ── Glitch Ghost Bay (Draggable anywhere on screen / Snaps to notch) ──
+            // ── Glitch Ghost Bay (Fixed dead-center directly below the notch cutout) ──
             ZStack {
                 if !isExpanded {
-                    let curX = ghostOffset.width + dragTranslation.width
-                    let curY = ghostOffset.height + dragTranslation.height
-
                     ZStack {
                         GlitchGhostCanvas(tier: currentTier, isPetted: isPetted)
                             .frame(width: 80, height: 74)
@@ -176,24 +180,7 @@ public struct NotchView: View {
                                 .scaleEffect(0.5 + p.progress * 0.7)
                         }
                     }
-                    .offset(x: curX, y: curY)
-                    .simultaneousGesture(
-                        DragGesture(minimumDistance: 4)
-                            .updating($dragTranslation) { value, state, _ in
-                                state = value.translation
-                            }
-                            .onEnded { value in
-                                ghostOffset.width = max(-220, min(220, ghostOffset.width + value.translation.width))
-                                ghostOffset.height = max(-10, min(180, ghostOffset.height + value.translation.height))
-                            }
-                    )
-                    .onTapGesture(count: 2) {
-                        // Double tap: Snap back home to center under notch!
-                        withAnimation(.spring(response: 0.38, dampingFraction: 0.72)) {
-                            ghostOffset = .zero
-                        }
-                    }
-                    .onTapGesture(count: 1) {
+                    .onTapGesture {
                         petGhost()
                     }
                 }
@@ -203,7 +190,7 @@ public struct NotchView: View {
             // ── Expanded Notch HUD Popover ──
             if isExpanded {
                 VStack(spacing: 12) {
-                    // Header Bar with Mascot, Reaction Mode, Snap-to-Notch, and Settings Gear
+                    // Header Bar with Mascot, Reaction Mode, and Settings Gear
                     HStack(spacing: 12) {
                         GlitchGhostCanvas(tier: currentTier, isPetted: isPetted)
                             .frame(width: 46, height: 46)
@@ -226,27 +213,6 @@ public struct NotchView: View {
                         }
 
                         Spacer()
-
-                        // Snap to Notch button (if companion was moved)
-                        if ghostOffset != .zero {
-                            Button(action: {
-                                withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
-                                    ghostOffset = .zero
-                                }
-                            }) {
-                                HStack(spacing: 3) {
-                                    Image(systemName: "arrow.counterclockwise")
-                                    Text("Snap")
-                                }
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundColor(.cyan)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 4)
-                                .background(Color.cyan.opacity(0.12))
-                                .cornerRadius(6)
-                            }
-                            .buttonStyle(.plain)
-                        }
 
                         // Settings Gear Button
                         Button(action: {
@@ -272,31 +238,6 @@ public struct NotchView: View {
                             Text("SETTINGS & CONFIGURATION")
                                 .font(.system(size: 10, weight: .bold))
                                 .foregroundColor(Color(white: 0.5))
-
-                            // Companion Position Control
-                            HStack {
-                                Text("Companion Location:")
-                                    .font(.system(size: 11, weight: .semibold))
-                                    .foregroundColor(.white)
-                                Spacer()
-                                Button(action: {
-                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
-                                        ghostOffset = .zero
-                                    }
-                                }) {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "house.fill")
-                                        Text("Reset to Notch")
-                                    }
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundColor(.cyan)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(Color.cyan.opacity(0.15))
-                                    .cornerRadius(6)
-                                }
-                                .buttonStyle(.plain)
-                            }
 
                             // Companion Reaction Driver Switcher
                             VStack(alignment: .leading, spacing: 5) {
@@ -532,7 +473,7 @@ public struct NotchView: View {
         .frame(width: 520)
         .onReceive(networkMonitor.$downloadSpeed) { newSpeed in
             speedHistory.append(newSpeed)
-            if speedHistory.count > 24 { speedHistory.removeFirst() }
+            if speedHistory.count > 20 { speedHistory.removeFirst() }
         }
     }
 
@@ -621,14 +562,15 @@ public struct NotchView: View {
     }
 }
 
-// MARK: - Mini Sparkline Canvas in Wing
+// MARK: - Mini Sparkline Canvas in Wing (Supports Custom Colors)
 struct MiniSparklineCanvas: View {
     let data: [Double]
+    let color: Color
 
     var body: some View {
         Canvas { context, size in
             guard data.count > 1 else { return }
-            let maxVal = max(data.max() ?? 10.0, 1024.0)
+            let maxVal = max(data.max() ?? 10.0, 10.0)
             let stepX = size.width / CGFloat(data.count - 1)
 
             var path = Path()
@@ -638,7 +580,7 @@ struct MiniSparklineCanvas: View {
                 if i == 0 { path.move(to: CGPoint(x: x, y: y)) }
                 else { path.addLine(to: CGPoint(x: x, y: y)) }
             }
-            context.stroke(path, with: .color(Color(red: 0.25, green: 0.79, blue: 0.50)), lineWidth: 1.5)
+            context.stroke(path, with: .color(color), lineWidth: 1.5)
         }
     }
 }

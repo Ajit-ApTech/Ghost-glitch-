@@ -7,17 +7,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let cpuMonitor = CPUMonitor()
 
     let panelWidth: CGFloat = 520
-    let panelHeight: CGFloat = 580
+    var isExpanded: Bool = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory) // Hides from Dock, behaves as sleek menu bar companion
 
-        let notchView = NotchView(networkMonitor: networkMonitor, cpuMonitor: cpuMonitor)
+        let notchView = NotchView(
+            networkMonitor: networkMonitor,
+            cpuMonitor: cpuMonitor,
+            onToggleExpand: { [weak self] expanded in
+                self?.setExpanded(expanded)
+            }
+        )
         let hostingView = NSHostingView(rootView: notchView)
 
-        // Create borderless floating panel
+        // Collapsed height (110pt) covers the notch bar (34pt) and companion (74pt) only
+        let initialHeight: CGFloat = 110
         panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: panelWidth, height: panelHeight),
+            contentRect: NSRect(x: 0, y: 0, width: panelWidth, height: initialHeight),
             styleMask: [.nonactivatingPanel, .borderless],
             backing: .buffered,
             defer: false
@@ -32,7 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.contentView = hostingView
         panel.ignoresMouseEvents = false
 
-        positionPanelAtNotch()
+        positionPanelAtNotch(height: initialHeight)
         panel.orderFrontRegardless()
 
         // Re-align if display configuration changes
@@ -44,19 +51,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
-    @objc private func screenParametersChanged() {
-        positionPanelAtNotch()
+    func setExpanded(_ expanded: Bool) {
+        self.isExpanded = expanded
+        let targetHeight: CGFloat = expanded ? 580 : 110
+        positionPanelAtNotch(height: targetHeight)
     }
 
-    private func positionPanelAtNotch() {
+    @objc private func screenParametersChanged() {
+        let currentHeight: CGFloat = isExpanded ? 580 : 110
+        positionPanelAtNotch(height: currentHeight)
+    }
+
+    private func positionPanelAtNotch(height: CGFloat) {
         guard let screen = NSScreen.main else { return }
         let screenFrame = screen.frame
 
         // Center horizontally on display, align flush to top edge
         let xPos = screenFrame.origin.x + (screenFrame.width - panelWidth) / 2
-        let yPos = screenFrame.origin.y + screenFrame.height - panelHeight
+        let yPos = screenFrame.origin.y + screenFrame.height - height
 
-        panel.setFrame(NSRect(x: xPos, y: yPos, width: panelWidth, height: panelHeight), display: true)
+        panel.setFrame(NSRect(x: xPos, y: yPos, width: panelWidth, height: height), display: true)
     }
 }
 
