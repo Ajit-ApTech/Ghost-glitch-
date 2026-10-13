@@ -10,7 +10,7 @@ public enum ReactionMode: String, CaseIterable {
 public enum GhostExpressionTier: String, CaseIterable {
     case sleep    = "sleep"    // Peaceful / Idle
     case happy    = "happy"    // Light traffic
-    case focus    = "focus"    // Moderate traffic / streaming
+    case focus    = "focus"    // Moderate traffic / streaming (ocular targeting)
     case strain   = "strain"   // Heavy load
     case panic    = "panic"    // Extreme traffic / stress
     case dead     = "dead"     // Saturated / pegged
@@ -35,9 +35,13 @@ public struct NotchView: View {
     @State private var isPetted = false
     @State private var useBits = false
     @State private var reactionMode: ReactionMode = .network
-    @State private var speedHistory: [Double] = Array(repeating: 0, count: 20)
+    @State private var speedHistory: [Double] = Array(repeating: 0, count: 24)
     @State private var particles: [PetParticle] = []
     @State private var copiedIP = false
+
+    // Movable Companion Position Offset
+    @State private var ghostOffset: CGSize = .zero
+    @GestureState private var dragTranslation: CGSize = .zero
 
     // Configurable thresholds (in KB/s for network, % for CPU)
     @State private var threshSleep: Double  = 10.0
@@ -76,8 +80,8 @@ public struct NotchView: View {
         VStack(spacing: 0) {
             // ── Notch Bar & Wing Telemetry (Calibrated for M4 MacBook Air: 490pt wide, 210pt notch cutout) ──
             HStack(spacing: 0) {
-                // Left Wing: Stacked Speeds + Live Mini Sparkline
-                HStack(spacing: 7) {
+                // Left Wing (130pt): Clean Stacked Speeds
+                HStack(spacing: 4) {
                     let d = formatSpeed(networkMonitor.downloadSpeed, useBits: useBits)
                     let u = formatSpeed(networkMonitor.uploadSpeed, useBits: useBits)
 
@@ -89,7 +93,7 @@ public struct NotchView: View {
                                 .font(.system(size: 10))
                             Text(d.val)
                                 .foregroundColor(.white)
-                                .font(.system(size: 10.5, weight: .bold, design: .monospaced))
+                                .font(.system(size: 11, weight: .bold, design: .monospaced))
                             Text(d.unit)
                                 .foregroundColor(Color(white: 0.65))
                                 .font(.system(size: 9, weight: .semibold, design: .monospaced))
@@ -101,26 +105,26 @@ public struct NotchView: View {
                                 .font(.system(size: 10))
                             Text(u.val)
                                 .foregroundColor(.white)
-                                .font(.system(size: 10.5, weight: .bold, design: .monospaced))
+                                .font(.system(size: 11, weight: .bold, design: .monospaced))
                             Text(u.unit)
                                 .foregroundColor(Color(white: 0.65))
                                 .font(.system(size: 9, weight: .semibold, design: .monospaced))
                         }
                     }
-
-                    // Mini Live Canvas Sparkline
-                    MiniSparklineCanvas(data: speedHistory)
-                        .frame(width: 44, height: 16)
                 }
-                .padding(.leading, 12)
-                .frame(width: 140, alignment: .leading)
+                .padding(.leading, 14)
+                .frame(width: 130, alignment: .leading)
 
-                // Center Notch Cutout Gap (210pt clear for M4 MacBook Air camera bezel)
+                // Center Notch Cutout Gap (210pt clear for physical M4 camera cutout)
                 Spacer()
                     .frame(width: 210)
 
-                // Right Wing: Latency Ping & CPU Badge
+                // Right Wing (150pt): Extended Speed Graph + Latency Ping & CPU
                 HStack(spacing: 8) {
+                    // Extended live speed graph filling the space to the right of the notch
+                    MiniSparklineCanvas(data: speedHistory)
+                        .frame(width: 78, height: 18)
+
                     Circle()
                         .fill(pingColor)
                         .frame(width: 6, height: 6)
@@ -136,7 +140,7 @@ public struct NotchView: View {
                     }
                 }
                 .padding(.trailing, 12)
-                .frame(width: 140, alignment: .trailing)
+                .frame(width: 150, alignment: .trailing)
             }
             .frame(width: 490, height: 34)
             .background(Color.black)
@@ -148,25 +152,47 @@ public struct NotchView: View {
                 }
             }
 
-            // ── Glitch Ghost Bay (Hangs directly below the notch cutout) ──
+            // ── Glitch Ghost Bay (Draggable anywhere on screen / Snaps to notch) ──
             ZStack {
                 if !isExpanded {
-                    GlitchGhostCanvas(tier: currentTier, isPetted: isPetted)
-                        .frame(width: 80, height: 74)
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            petGhost()
-                        }
-                        .scaleEffect(isPetted ? 1.08 : 1.0)
-                        .animation(.spring(response: 0.25, dampingFraction: 0.6), value: isPetted)
+                    let totalOffsetX = ghostOffset.width + dragTranslation.width
+                    let totalOffsetY = ghostOffset.height + dragTranslation.height
 
-                    // Pet Sparkle Particles (Fanning outward to sides & downward into clear space)
-                    ForEach(particles) { p in
-                        Text(p.emoji)
-                            .font(.system(size: 18))
-                            .offset(x: p.dx * p.progress, y: p.dy * p.progress)
-                            .opacity(Double(1.0 - p.progress))
-                            .scaleEffect(0.5 + p.progress * 0.7)
+                    ZStack {
+                        GlitchGhostCanvas(tier: currentTier, isPetted: isPetted)
+                            .frame(width: 80, height: 74)
+                            .contentShape(Rectangle())
+                            .scaleEffect(isPetted ? 1.08 : 1.0)
+                            .animation(.spring(response: 0.25, dampingFraction: 0.6), value: isPetted)
+
+                        // Pet Sparkle Particles (Cascade outward to sides and down)
+                        ForEach(particles) { p in
+                            Text(p.emoji)
+                                .font(.system(size: 18))
+                                .offset(x: p.dx * p.progress, y: p.dy * p.progress)
+                                .opacity(Double(1.0 - p.progress))
+                                .scaleEffect(0.5 + p.progress * 0.7)
+                        }
+                    }
+                    .offset(x: totalOffsetX, y: totalOffsetY)
+                    .gesture(
+                        DragGesture(minimumDistance: 4)
+                            .updating($dragTranslation) { value, state, _ in
+                                state = value.translation
+                            }
+                            .onEnded { value in
+                                ghostOffset.width += value.translation.width
+                                ghostOffset.height += value.translation.height
+                            }
+                    )
+                    .onTapGesture(count: 2) {
+                        // Double tap: Snap back home to center under notch!
+                        withAnimation(.spring(response: 0.38, dampingFraction: 0.72)) {
+                            ghostOffset = .zero
+                        }
+                    }
+                    .onTapGesture(count: 1) {
+                        petGhost()
                     }
                 }
             }
@@ -175,7 +201,7 @@ public struct NotchView: View {
             // ── Expanded Notch HUD Popover ──
             if isExpanded {
                 VStack(spacing: 12) {
-                    // Header Bar with Mascot, Reaction Mode, and Settings Gear
+                    // Header Bar with Mascot, Reaction Mode, Snap-to-Notch, and Settings Gear
                     HStack(spacing: 12) {
                         GlitchGhostCanvas(tier: currentTier, isPetted: isPetted)
                             .frame(width: 46, height: 46)
@@ -198,6 +224,27 @@ public struct NotchView: View {
                         }
 
                         Spacer()
+
+                        // Snap to Notch button (if companion was moved)
+                        if ghostOffset != .zero {
+                            Button(action: {
+                                withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                                    ghostOffset = .zero
+                                }
+                            }) {
+                                HStack(spacing: 3) {
+                                    Image(systemName: "arrow.counterclockwise")
+                                    Text("Snap")
+                                }
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(.cyan)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 4)
+                                .background(Color.cyan.opacity(0.12))
+                                .cornerRadius(6)
+                            }
+                            .buttonStyle(.plain)
+                        }
 
                         // Settings Gear Button
                         Button(action: {
@@ -223,6 +270,31 @@ public struct NotchView: View {
                             Text("SETTINGS & CONFIGURATION")
                                 .font(.system(size: 10, weight: .bold))
                                 .foregroundColor(Color(white: 0.5))
+
+                            // Companion Position Control
+                            HStack {
+                                Text("Companion Location:")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(.white)
+                                Spacer()
+                                Button(action: {
+                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                                        ghostOffset = .zero
+                                    }
+                                }) {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "house.fill")
+                                        Text("Reset to Notch")
+                                    }
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(.cyan)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.cyan.opacity(0.15))
+                                    .cornerRadius(6)
+                                }
+                                .buttonStyle(.plain)
+                            }
 
                             // Companion Reaction Driver Switcher
                             VStack(alignment: .leading, spacing: 5) {
@@ -458,7 +530,7 @@ public struct NotchView: View {
         .frame(width: 500)
         .onReceive(networkMonitor.$downloadSpeed) { newSpeed in
             speedHistory.append(newSpeed)
-            if speedHistory.count > 20 { speedHistory.removeFirst() }
+            if speedHistory.count > 24 { speedHistory.removeFirst() }
         }
     }
 
@@ -521,7 +593,7 @@ public struct NotchView: View {
             switch currentTier {
             case .sleep:  return "Idle (< 10 KB/s) · Drifting peacefully..."
             case .happy:  return "Light Bandwidth (10–500 KB/s) · Cruising"
-            case .focus:  return "Medium Load (500 KB–1 MB/s) · Streaming"
+            case .focus:  return "Medium Load (500 KB–1 MB/s) · Locked on target"
             case .strain: return "Heavy Load (1–5 MB/s) · Working hard!"
             case .panic:  return "Extreme Load (5–10 MB/s) · High Traffic!"
             case .dead:   return "Maxed Out (> 10 MB/s) · Network Saturated"
@@ -541,7 +613,7 @@ public struct NotchView: View {
         switch currentTier {
         case .dead, .panic: return Color(red: 0.97, green: 0.32, blue: 0.29)
         case .strain:      return Color(red: 0.98, green: 0.65, blue: 0.22)
-        case .focus:       return Color(red: 0.35, green: 0.65, blue: 1.0)
+        case .focus:       return Color(red: 0.22, green: 0.74, blue: 0.97)
         default:           return Color(red: 0.25, green: 0.79, blue: 0.50)
         }
     }
@@ -697,7 +769,7 @@ public struct GlitchGhostCanvas: View {
                     switch tier {
                     case .dead, .panic: glowColor = Color(red: 0.97, green: 0.32, blue: 0.29)
                     case .strain:      glowColor = Color(red: 0.98, green: 0.65, blue: 0.22)
-                    case .focus:       glowColor = Color(red: 0.35, green: 0.65, blue: 1.0)
+                    case .focus:       glowColor = Color(red: 0.22, green: 0.74, blue: 0.97)
                     case .happy:       glowColor = Color(red: 0.25, green: 0.79, blue: 0.50)
                     case .sleep:       glowColor = Color(red: 0.58, green: 0.64, blue: 0.72)
                     }
@@ -773,7 +845,7 @@ public struct GlitchGhostCanvas: View {
                 } else {
                     switch tier {
                     case .sleep:
-                        // Crescent sleeping eyes + drifting Z
+                        // Crescent sleeping eyes
                         context.stroke(
                             crescentEye(center: CGPoint(x: ecx - es, y: ecy + 1)),
                             with: .color(Color(red: 0.38, green: 0.58, blue: 0.88)),
@@ -798,15 +870,39 @@ public struct GlitchGhostCanvas: View {
                         context.fill(Path(ellipseIn: clR), with: .color(.white))
 
                     case .focus:
-                        // Electric blue eyes with cursor tracking
-                        let eyeL = CGRect(x: ecx - es - 2 + eyeOffsetX, y: ecy - 2 + eyeOffsetY, width: 4.2, height: 4.2)
-                        let eyeR = CGRect(x: ecx + es - 2 + eyeOffsetX, y: ecy - 2 + eyeOffsetY, width: 4.2, height: 4.2)
-                        context.fill(Path(ellipseIn: eyeL), with: .color(Color(red: 0.35, green: 0.65, blue: 1.0)))
-                        context.fill(Path(ellipseIn: eyeR), with: .color(Color(red: 0.35, green: 0.65, blue: 1.0)))
-                        let clL = CGRect(x: ecx - es - 1 + eyeOffsetX, y: ecy - 1.5 + eyeOffsetY, width: 1.4, height: 1.4)
-                        let clR = CGRect(x: ecx + es - 1 + eyeOffsetX, y: ecy - 1.5 + eyeOffsetY, width: 1.4, height: 1.4)
+                        // 🎯 FOCUS: Ocular targeting rings + intense pupils + focused brow lines
+                        let eyeCol = Color(red: 0.22, green: 0.74, blue: 0.97)
+
+                        // 1. Concentric ocular focus rings
+                        let ringRadius: CGFloat = 4.3
+                        let ringL = CGRect(x: ecx - es - ringRadius, y: ecy - ringRadius, width: ringRadius * 2, height: ringRadius * 2)
+                        let ringR = CGRect(x: ecx + es - ringRadius, y: ecy - ringRadius, width: ringRadius * 2, height: ringRadius * 2)
+                        context.stroke(Path(ellipseIn: ringL), with: .color(eyeCol.opacity(0.48)), lineWidth: 1.1)
+                        context.stroke(Path(ellipseIn: ringR), with: .color(eyeCol.opacity(0.48)), lineWidth: 1.1)
+
+                        // 2. Focused pupil dots with eye tracking
+                        let pupilR: CGFloat = 2.8
+                        let pL = CGRect(x: ecx - es - pupilR + eyeOffsetX * 0.9, y: ecy - pupilR + eyeOffsetY * 0.9, width: pupilR * 2, height: pupilR * 2)
+                        let pR = CGRect(x: ecx + es - pupilR + eyeOffsetX * 0.9, y: ecy - pupilR + eyeOffsetY * 0.9, width: pupilR * 2, height: pupilR * 2)
+                        context.fill(Path(ellipseIn: pL), with: .color(eyeCol))
+                        context.fill(Path(ellipseIn: pR), with: .color(eyeCol))
+
+                        // 3. Specular catchlights
+                        let clL = CGRect(x: ecx - es - 1 + eyeOffsetX * 0.9, y: ecy - 1.2 + eyeOffsetY * 0.9, width: 1.2, height: 1.2)
+                        let clR = CGRect(x: ecx + es - 1 + eyeOffsetX * 0.9, y: ecy - 1.2 + eyeOffsetY * 0.9, width: 1.2, height: 1.2)
                         context.fill(Path(ellipseIn: clL), with: .color(.white))
                         context.fill(Path(ellipseIn: clR), with: .color(.white))
+
+                        // 4. Focused brow lines slanting down towards center
+                        var browL = Path()
+                        browL.move(to: CGPoint(x: ecx - es - 4.2, y: ecy - 4.6))
+                        browL.addLine(to: CGPoint(x: ecx - 1.4, y: ecy - 3.4))
+                        context.stroke(browL, with: .color(eyeCol), lineWidth: 1.3)
+
+                        var browR = Path()
+                        browR.move(to: CGPoint(x: ecx + 1.4, y: ecy - 3.4))
+                        browR.addLine(to: CGPoint(x: ecx + es + 4.2, y: ecy - 4.6))
+                        context.stroke(browR, with: .color(eyeCol), lineWidth: 1.3)
 
                     case .strain:
                         // Downward arc eyes + sweat drop
