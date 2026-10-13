@@ -1,0 +1,15 @@
+# OS files
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+
+# Swift Package Manager & Build files
+.build/
+mac-app/.build/
+*.xcodeproj
+*.xcworkspace
+DerivedData/
+
+# Logs & temp
+*.log

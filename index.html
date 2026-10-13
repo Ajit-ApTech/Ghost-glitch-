@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Notch Buddy — Glitch Ghost &amp; Live Speed Meter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="index.css">
+</head>
+<body>
+<div class="screen-wrapper">
+  <div class="notch-zone" id="notchZone">
+    <div class="notch-container" id="notchContainer">
+      <div class="notch-bar" id="notchBar">
+        <div class="bar-wing bar-left">
+          <div class="speed-stack">
+            <div class="speed-row">
+              <span class="spd-arrow dw">&#8595;</span>
+              <span class="spd-val" id="downVal">0</span>
+              <span class="spd-unit" id="downUnit">KB/s</span>
+            </div>
+            <div class="speed-row">
+              <span class="spd-arrow up">&#8593;</span>
+              <span class="spd-val" id="upVal">0</span>
+              <span class="spd-unit" id="upUnit">KB/s</span>
+            </div>
+          </div>
+          <div class="mini-sparkline">
+            <canvas id="sparklineCanvas" width="46" height="16"></canvas>
+          </div>
+        </div>
+        <div class="notch-cutout">
+          <div class="camera-lens"></div>
+          <div class="camera-indicator" id="camIndicator"></div>
+        </div>
+        <div class="bar-wing bar-right">
+          <div class="ping-dot" id="pingDot"></div>
+          <div class="cpu-chip">
+            <span class="cpu-lbl">CPU</span>
+            <span class="cpu-val" id="cpuVal">8%</span>
+          </div>
+        </div>
+      </div>
+      <div class="ghost-bay" id="ghostBay" title="Click to pet! Click bar to toggle HUD">
+        <canvas id="ghostCanvas" width="160" height="200"></canvas>
+        <div class="heart-emitter" id="heartEmitter"></div>
+      </div>
+      <div class="notch-hud" id="notchHud">
+        <div class="hud-top">
+          <div class="hud-mascot-badge">
+            <div class="hud-mascot-pic">
+              <canvas id="hudMiniCanvas" width="60" height="60"></canvas>
+            </div>
+            <div class="hud-mascot-info">
+              <div class="hud-name">Glitch &middot; Notch Ghost</div>
+              <div class="hud-status-desc" id="hudStatusDesc">Idle &middot; Drifting peacefully...</div>
+            </div>
+          </div>
+          <div class="hud-top-actions">
+            <div class="hud-ping">
+              <span class="ping-pulse"></span>
+              <span id="hudPingText">16 ms &middot; Ultra Low</span>
+            </div>
+            <button class="hud-icon-btn" id="btnToggleSettings" title="Customize Speed Limits for Reactions">&#9881;&#65039;</button>
+          </div>
+        </div>
+
+        <!-- Collapsible Reaction Speed Limits in HUD -->
+        <div class="hud-settings-panel" id="hudSettingsPanel">
+          <div class="settings-head">
+            <span>&#9881;&#65039; Reaction Speed Limits</span>
+            <button class="settings-close-btn" id="btnCloseSettings" title="Close Settings">&times;</button>
+          </div>
+          <div class="settings-desc">Set minimum speed to trigger each companion emotion:</div>
+          <div class="settings-grid">
+            <div class="setting-item">
+              <span class="setting-emoji">&#128522;</span>
+              <span class="setting-name">Happy:</span>
+              <input type="number" id="cfgHappy" min="1" max="1000" step="5" value="10">
+              <span class="setting-unit">KB/s</span>
+            </div>
+            <div class="setting-item">
+              <span class="setting-emoji">&#127919;</span>
+              <span class="setting-name">Focus:</span>
+              <input type="number" id="cfgFocus" min="10" max="5000" step="50" value="500">
+              <span class="setting-unit">KB/s</span>
+            </div>
+            <div class="setting-item">
+              <span class="setting-emoji">&#128548;</span>
+              <span class="setting-name">Strain:</span>
+              <input type="number" id="cfgStrain" min="0.1" max="50" step="0.5" value="1.0">
+              <span class="setting-unit">MB/s</span>
+            </div>
+            <div class="setting-item">
+              <span class="setting-emoji">&#128561;</span>
+              <span class="setting-name">Panic:</span>
+              <input type="number" id="cfgPanic" min="0.5" max="100" step="1" value="5.0">
+              <span class="setting-unit">MB/s</span>
+            </div>
+            <div class="setting-item">
+              <span class="setting-emoji">&#128128;</span>
+              <span class="setting-name">Dead:</span>
+              <input type="number" id="cfgDead" min="1" max="200" step="1" value="10.0">
+              <span class="setting-unit">MB/s</span>
+            </div>
+            <div class="setting-item">
+              <span class="setting-emoji">&#9889;</span>
+              <span class="setting-name">Refresh:</span>
+              <select id="cfgRefresh" class="setting-select">
+                <option value="500">0.5s (Turbo)</option>
+                <option value="1000" selected>1.0s (Balanced)</option>
+                <option value="2000">2.0s (Battery Saver)</option>
+              </select>
+            </div>
+            <div class="setting-item">
+              <span class="setting-emoji">&#128290;</span>
+              <span class="setting-name">Unit:</span>
+              <select id="cfgUnitMode" class="setting-select">
+                <option value="bytes" selected>Bytes (MB/s, KB/s)</option>
+                <option value="bits">Bits (Mbps, Kbps)</option>
+              </select>
+            </div>
+          </div>
+          <div class="settings-actions">
+            <button class="btn-sub secondary" id="btnResetLimits">Reset Defaults</button>
+            <button class="btn-sub primary" id="btnSaveLimits">Save Limits</button>
+          </div>
+        </div>
+
+        <div class="hud-speed-grid">
+          <div class="hud-speed-cell">
+            <span class="cell-title">DOWNLOAD</span>
+            <div class="cell-speed">
+              <span class="cell-arrow dw">&#8595;</span>
+              <span class="cell-num" id="hudDownNum">0</span>
+              <span class="cell-unit" id="hudDownUnit">KB/s</span>
+            </div>
+            <div class="cell-sub">Peak: <span id="hudPeakDown">84.2 MB/s</span></div>
+          </div>
+          <div class="hud-speed-cell">
+            <span class="cell-title">UPLOAD</span>
+            <div class="cell-speed">
+              <span class="cell-arrow up">&#8593;</span>
+              <span class="cell-num" id="hudUpNum">0</span>
+              <span class="cell-unit" id="hudUpUnit">KB/s</span>
+            </div>
+            <div class="cell-sub">Peak: <span id="hudPeakUp">12.5 MB/s</span></div>
+          </div>
+        </div>
+
+        <!-- Top Bandwidth Applications Breakdown -->
+        <div class="hud-apps-section">
+          <div class="section-micro-head">
+            <span>&#128293; TOP BANDWIDTH APPS</span>
+            <span class="micro-badge">per-process</span>
+          </div>
+          <div class="apps-list">
+            <div class="app-row">
+              <div class="app-info"><span class="app-icon">&#127760;</span><span class="app-name">Google Chrome</span></div>
+              <span class="app-val" id="appUsageChrome">0 KB/s</span>
+            </div>
+            <div class="app-row">
+              <div class="app-info"><span class="app-icon">&#127918;</span><span class="app-name">Steam</span></div>
+              <span class="app-val" id="appUsageSteam">0 KB/s</span>
+            </div>
+            <div class="app-row">
+              <div class="app-info"><span class="app-icon">&#128172;</span><span class="app-name">Slack</span></div>
+              <span class="app-val" id="appUsageSlack">0 KB/s</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Monthly Data Quota Progress Tracker -->
+        <div class="hud-quota-section">
+          <div class="quota-head">
+            <span class="quota-lbl">DATA QUOTA (MONTHLY)</span>
+            <span class="quota-val" id="quotaText">48.2 / 100 GB (48%)</span>
+          </div>
+          <div class="quota-track">
+            <div class="quota-fill" id="quotaFill" style="width: 48%;"></div>
+          </div>
+        </div>
+
+        <div class="hud-info-row">
+          <div class="hud-chip">
+            <span class="chip-lbl">INTERFACE</span>
+            <span class="chip-txt">en0 (Wi-Fi 6)</span>
+          </div>
+          <div class="hud-chip copyable" id="ipChip" title="Click to copy IP">
+            <span class="chip-lbl">IP ADDRESS</span>
+            <div class="chip-txt-row">
+              <span class="chip-txt" id="hudIp">192.168.1.142</span>
+              <span class="chip-badge">copy</span>
+            </div>
+          </div>
+          <div class="hud-chip">
+            <span class="chip-lbl">SESSION TOTAL</span>
+            <span class="chip-txt" id="hudSessionBytes">1.42 GB</span>
+          </div>
+        </div>
+        <div class="hud-actions">
+          <button class="action-btn primary" id="btnQuickTest"><span>&#9889;</span> Run Speedtest</button>
+          <button class="action-btn secondary" id="btnToggleUnit"><span>&#128290;</span> <span id="btnUnitLabel">Switch to Mbps</span></button>
+          <button class="action-btn secondary" id="btnPetTreat"><span>&#127852;</span> Treat</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <main class="studio-workspace">
+    <div class="studio-card">
+      <div class="studio-header">
+        <div class="sub-badge">GLITCH GHOST &middot; PROCEDURAL 60 FPS &middot; LCD EXPRESSIONS &middot; EYE TRACKING</div>
+        <h1>Notch Companion Studio</h1>
+        <p class="description">A living ghost companion with a reactive LCD screen face, real-time cursor eye-tracking, float animations, and dynamic arm gestures reflecting system performance.</p>
+      </div>
+      <div class="section-divider">
+        <h3>Performance States &mdash; Click to Activate</h3>
+        <p class="sub-text">6 live animated tiers, each with a unique ghost expression and glow color:</p>
+      </div>
+      <div class="performance-cards-grid">
+        <div class="perf-card active" data-state="idle" data-cpu="6" data-down="0.005" data-up="0.001">
+          <div class="card-thumb bg-slate"><canvas class="card-canvas" width="160" height="160" data-tier="idle"></canvas></div>
+          <div class="card-meta"><h4>Idle (&lt; 10 KB/s)</h4><p>&#128564; Sleeping &middot; Drifting peacefully</p></div>
+        </div>
+        <div class="perf-card" data-state="low" data-cpu="22" data-down="0.25" data-up="0.04">
+          <div class="card-thumb bg-green"><canvas class="card-canvas" width="160" height="160" data-tier="low"></canvas></div>
+          <div class="card-meta"><h4>10&ndash;500 KB/s</h4><p>&#128522; Happy &middot; Eye tracking &amp; catchlights</p></div>
+        </div>
+        <div class="perf-card" data-state="moderate" data-cpu="45" data-down="0.75" data-up="0.12">
+          <div class="card-thumb bg-blue"><canvas class="card-canvas" width="160" height="160" data-tier="moderate"></canvas></div>
+          <div class="card-meta"><h4>500 KB/s&ndash;1 MB/s</h4><p>&#127919; Focus &middot; Blue ocular tracking</p></div>
+        </div>
+        <div class="perf-card" data-state="high" data-cpu="68" data-down="3.2" data-up="0.45">
+          <div class="card-thumb bg-yellow"><canvas class="card-canvas" width="160" height="160" data-tier="high"></canvas></div>
+          <div class="card-meta"><h4>1&ndash;5 MB/s</h4><p>&#128548; Strain &middot; Worried brow &amp; sweat drop</p></div>
+        </div>
+        <div class="perf-card" data-state="critical" data-cpu="88" data-down="7.8" data-up="1.2">
+          <div class="card-thumb bg-red"><canvas class="card-canvas" width="160" height="160" data-tier="critical"></canvas></div>
+          <div class="card-meta"><h4 class="text-red">5&ndash;10 MB/s</h4><p class="text-red">&#128561; Panic! Red X eyes shaking</p></div>
+        </div>
+        <div class="perf-card" data-state="peak" data-cpu="99" data-down="18.5" data-up="3.5">
+          <div class="card-thumb bg-mauve"><canvas class="card-canvas" width="160" height="160" data-tier="peak"></canvas></div>
+          <div class="card-meta"><h4>&gt; 10 MB/s</h4><p>&#128128; Dead &middot; Overload X eyes &amp; drool</p></div>
+        </div>
+      </div>
+      <div class="control-box-wide">
+        <div class="control-box-title"><span>&#9881;&#65039;</span> Real-time Telemetry Controls</div>
+        <div class="sliders-row">
+          <div class="slider-item">
+            <div class="slider-lbl"><span>Download Speed:</span><strong id="sliderDownTxt">0 KB/s</strong></div>
+            <input type="range" id="sliderDown" min="0" max="25" step="0.05" value="0">
+          </div>
+          <div class="slider-item">
+            <div class="slider-lbl"><span>CPU Load:</span><strong id="sliderCpuTxt">8%</strong></div>
+            <input type="range" id="sliderCpu" min="0" max="100" step="1" value="8">
+          </div>
+        </div>
+      </div>
+
+      <div class="control-box-wide settings-box">
+        <div class="control-box-title">
+          <span>&#9881;&#65039; Reaction Speed Limits (Custom Thresholds)</span>
+          <span class="sub-pill">Live Settings</span>
+        </div>
+        <p class="settings-intro">Manually customize the minimum network speeds that trigger each ghost expression:</p>
+        <div class="studio-thresh-grid">
+          <div class="st-card">
+            <div class="st-card-title">&#128522; Happy</div>
+            <div class="st-card-field">
+              <label>Min Speed:</label>
+              <div class="st-inp-wrap">
+                <input type="number" id="stHappy" min="1" max="1000" step="5" value="10">
+                <span>KB/s</span>
+              </div>
+            </div>
+          </div>
+          <div class="st-card">
+            <div class="st-card-title">&#127919; Focus</div>
+            <div class="st-card-field">
+              <label>Min Speed:</label>
+              <div class="st-inp-wrap">
+                <input type="number" id="stFocus" min="10" max="5000" step="50" value="500">
+                <span>KB/s</span>
+              </div>
+            </div>
+          </div>
+          <div class="st-card">
+            <div class="st-card-title">&#128548; Strain</div>
+            <div class="st-card-field">
+              <label>Min Speed:</label>
+              <div class="st-inp-wrap">
+                <input type="number" id="stStrain" min="0.1" max="50" step="0.5" value="1.0">
+                <span>MB/s</span>
+              </div>
+            </div>
+          </div>
+          <div class="st-card">
+            <div class="st-card-title">&#128561; Panic</div>
+            <div class="st-card-field">
+              <label>Min Speed:</label>
+              <div class="st-inp-wrap">
+                <input type="number" id="stPanic" min="0.5" max="100" step="1" value="5.0">
+                <span>MB/s</span>
+              </div>
+            </div>
+          </div>
+          <div class="st-card">
+            <div class="st-card-title">&#128128; Dead</div>
+            <div class="st-card-field">
+              <label>Min Speed:</label>
+              <div class="st-inp-wrap">
+                <input type="number" id="stDead" min="1" max="200" step="1" value="10.0">
+                <span>MB/s</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="st-actions">
+          <button class="action-btn secondary" id="btnStReset"><span>&#8634;</span> Reset Defaults</button>
+          <button class="action-btn primary" id="btnStApply"><span>&#10003;</span> Apply &amp; Save Limits</button>
+        </div>
+      </div>
+      <div class="studio-tags">
+        <span class="tag">Swift 6.0 Ready</span>
+        <span class="tag">AppKit NSPanel</span>
+        <span class="tag">BSD getifaddrs()</span>
+        <span class="tag">Canvas 2D &middot; 60 FPS</span>
+        <span class="tag">LCD Screen Expressions</span>
+        <span class="tag">Cursor Eye Tracking</span>
+        <span class="tag">KB/s &rarr; MB/s Auto Unit</span>
+        <span class="tag">Target RAM: ~14 MB</span>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
