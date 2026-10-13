@@ -1,31 +1,19 @@
 import AppKit
 import SwiftUI
 
-// Passthrough Hosting View: Clicks on transparent empty background pass straight through to underlying apps (Chrome, Finder, etc.)
-final class PassthroughHostingView<Content: View>: NSHostingView<Content> {
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        let view = super.hitTest(point)
-        // If hit is on the root hosting view background rather than an interactive child element, pass through to underlying windows
-        if view == self {
-            return nil
-        }
-        return view
-    }
-}
-
 final class AppDelegate: NSObject, NSApplicationDelegate {
     var panel: NSPanel!
     let networkMonitor = NetworkMonitor()
     let cpuMonitor = CPUMonitor()
 
-    let panelWidth: CGFloat = 850
-    let panelHeight: CGFloat = 620
+    let panelWidth: CGFloat = 520
+    let panelHeight: CGFloat = 580
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory) // Hides from Dock, behaves as sleek menu bar companion
 
         let notchView = NotchView(networkMonitor: networkMonitor, cpuMonitor: cpuMonitor)
-        let hostingView = PassthroughHostingView(rootView: notchView)
+        let hostingView = NSHostingView(rootView: notchView)
 
         // Create borderless floating panel
         panel = NSPanel(

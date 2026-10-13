@@ -10,7 +10,7 @@ public enum ReactionMode: String, CaseIterable {
 public enum GhostExpressionTier: String, CaseIterable {
     case sleep    = "sleep"    // Peaceful / Idle
     case happy    = "happy"    // Light traffic
-    case focus    = "focus"    // Moderate traffic / streaming (ocular targeting)
+    case focus    = "focus"    // Moderate traffic (ocular targeting)
     case strain   = "strain"   // Heavy load
     case panic    = "panic"    // Extreme traffic / stress
     case dead     = "dead"     // Saturated / pegged
@@ -78,9 +78,9 @@ public struct NotchView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            // ── Notch Bar & Wing Telemetry (Calibrated for M4 MacBook Air: 490pt wide, 210pt notch cutout) ──
+            // ── Notch Bar & Wing Telemetry (Symmetrical 520pt: 160pt Left + 200pt Cutout + 160pt Right) ──
             HStack(spacing: 0) {
-                // Left Wing (130pt): Clean Stacked Speeds
+                // Left Wing (160pt): Clean Stacked Speeds
                 HStack(spacing: 4) {
                     let d = formatSpeed(networkMonitor.downloadSpeed, useBits: useBits)
                     let u = formatSpeed(networkMonitor.uploadSpeed, useBits: useBits)
@@ -112,18 +112,18 @@ public struct NotchView: View {
                         }
                     }
                 }
-                .padding(.leading, 14)
-                .frame(width: 130, alignment: .leading)
+                .padding(.leading, 12)
+                .frame(width: 160, alignment: .leading)
 
-                // Center Notch Cutout Gap (210pt clear for physical M4 camera cutout)
+                // Center Notch Cutout Gap (200pt clear for physical M4 camera bezel)
                 Spacer()
-                    .frame(width: 210)
+                    .frame(width: 200)
 
-                // Right Wing (150pt): Extended Speed Graph + Latency Ping & CPU
-                HStack(spacing: 8) {
-                    // Extended live speed graph filling the space to the right of the notch
+                // Right Wing (160pt): Extended Speed Graph + Latency Ping & CPU Badge
+                HStack(spacing: 7) {
+                    // Extended live speed graph
                     MiniSparklineCanvas(data: speedHistory)
-                        .frame(width: 78, height: 18)
+                        .frame(width: 72, height: 16)
 
                     Circle()
                         .fill(pingColor)
@@ -138,11 +138,13 @@ public struct NotchView: View {
                             .foregroundColor(Color(red: 0.74, green: 0.55, blue: 0.98))
                             .font(.system(size: 11, weight: .bold, design: .monospaced))
                     }
+                    .lineLimit(1)
+                    .fixedSize()
                 }
                 .padding(.trailing, 12)
-                .frame(width: 150, alignment: .trailing)
+                .frame(width: 160, alignment: .trailing)
             }
-            .frame(width: 490, height: 34)
+            .frame(width: 520, height: 34)
             .background(Color.black)
             .cornerRadius(18)
             .contentShape(Rectangle())
@@ -155,8 +157,8 @@ public struct NotchView: View {
             // ── Glitch Ghost Bay (Draggable anywhere on screen / Snaps to notch) ──
             ZStack {
                 if !isExpanded {
-                    let totalOffsetX = ghostOffset.width + dragTranslation.width
-                    let totalOffsetY = ghostOffset.height + dragTranslation.height
+                    let curX = ghostOffset.width + dragTranslation.width
+                    let curY = ghostOffset.height + dragTranslation.height
 
                     ZStack {
                         GlitchGhostCanvas(tier: currentTier, isPetted: isPetted)
@@ -174,15 +176,15 @@ public struct NotchView: View {
                                 .scaleEffect(0.5 + p.progress * 0.7)
                         }
                     }
-                    .offset(x: totalOffsetX, y: totalOffsetY)
-                    .gesture(
+                    .offset(x: curX, y: curY)
+                    .simultaneousGesture(
                         DragGesture(minimumDistance: 4)
                             .updating($dragTranslation) { value, state, _ in
                                 state = value.translation
                             }
                             .onEnded { value in
-                                ghostOffset.width += value.translation.width
-                                ghostOffset.height += value.translation.height
+                                ghostOffset.width = max(-220, min(220, ghostOffset.width + value.translation.width))
+                                ghostOffset.height = max(-10, min(180, ghostOffset.height + value.translation.height))
                             }
                     )
                     .onTapGesture(count: 2) {
@@ -527,7 +529,7 @@ public struct NotchView: View {
                 .transition(.scale(scale: 0.94).combined(with: .opacity))
             }
         }
-        .frame(width: 500)
+        .frame(width: 520)
         .onReceive(networkMonitor.$downloadSpeed) { newSpeed in
             speedHistory.append(newSpeed)
             if speedHistory.count > 24 { speedHistory.removeFirst() }
