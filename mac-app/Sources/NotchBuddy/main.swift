@@ -22,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var isHUDOpen = false
     var globalEventMonitor: Any?
     var localEventMonitor: Any?
+    var keyEventMonitor: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory) // Hides from Dock, behaves as menu bar companion
@@ -176,6 +177,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             return event
         }
+
+        // Keyboard Shortcut: Cmd+Q to Quit, Esc to Close HUD
+        keyEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self = self, self.isHUDOpen else { return event }
+            if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "q" {
+                NSApplication.shared.terminate(nil)
+                return nil
+            }
+            if event.keyCode == 53 { // ESC key
+                DispatchQueue.main.async {
+                    self.closeHUD()
+                }
+                return nil
+            }
+            return event
+        }
     }
 
     func closeHUD() {
@@ -190,6 +207,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let lem = localEventMonitor {
             NSEvent.removeMonitor(lem)
             localEventMonitor = nil
+        }
+        if let kem = keyEventMonitor {
+            NSEvent.removeMonitor(kem)
+            keyEventMonitor = nil
         }
     }
 

@@ -152,6 +152,15 @@ public struct NotchBarView: View {
         .onTapGesture {
             onToggleHUD()
         }
+        .contextMenu {
+            Button("Open Dashboard") {
+                onToggleHUD()
+            }
+            Divider()
+            Button("Quit Notch Buddy") {
+                NSApplication.shared.terminate(nil)
+            }
+        }
         .onReceive(networkMonitor.$downloadSpeed) { newSpeed in
             speedHistory.append(newSpeed)
             if speedHistory.count > 20 { speedHistory.removeFirst() }
@@ -244,6 +253,15 @@ public struct GhostCompanionView: View {
             }
         }
         .frame(width: 80, height: 74)
+        .contextMenu {
+            Button("Pet Glitch ❤️") {
+                petGhost()
+            }
+            Divider()
+            Button("Quit Notch Buddy") {
+                NSApplication.shared.terminate(nil)
+            }
+        }
     }
 
     private func petGhost() {
@@ -346,117 +364,311 @@ public struct NotchHUDView: View {
 
                 Spacer()
 
-                // Settings Gear Button
-                Button(action: {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        showSettings.toggle()
+                HStack(spacing: 8) {
+                    // Quick Quit Power Button
+                    Button(action: {
+                        NSApplication.shared.terminate(nil)
+                    }) {
+                        Image(systemName: "power")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(Color(red: 0.98, green: 0.35, blue: 0.35))
+                            .padding(6)
+                            .background(Color.red.opacity(0.12))
+                            .clipShape(Circle())
                     }
-                }) {
-                    Image(systemName: showSettings ? "xmark.circle.fill" : "gearshape.fill")
-                        .font(.system(size: 14))
-                        .foregroundColor(showSettings ? .white : Color(white: 0.7))
-                        .padding(6)
-                        .background(Color.white.opacity(showSettings ? 0.20 : 0.08))
-                        .clipShape(Circle())
+                    .buttonStyle(.plain)
+                    .help("Quit Notch Buddy")
+
+                    // Settings Gear Button
+                    Button(action: {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            showSettings.toggle()
+                        }
+                    }) {
+                        Image(systemName: showSettings ? "xmark.circle.fill" : "gearshape.fill")
+                            .font(.system(size: 14))
+                            .foregroundColor(showSettings ? .white : Color(white: 0.7))
+                            .padding(6)
+                            .background(Color.white.opacity(showSettings ? 0.20 : 0.08))
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .help(showSettings ? "Close Settings" : "Settings & Quit")
                 }
-                .buttonStyle(.plain)
             }
 
             Divider().background(Color.white.opacity(0.10))
 
             if showSettings {
                 // Settings View
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("SETTINGS & CONFIGURATION")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(Color(white: 0.5))
-
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text("Companion Reaction Source:")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundColor(.white)
-                        Picker("", selection: $appSettings.reactionMode) {
-                            Text("⚡ Internet Speed").tag(ReactionMode.network)
-                            Text("🧠 CPU Load").tag(ReactionMode.cpu)
+                VStack(spacing: 12) {
+                    // Card 1: Preferences & Controls
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("⚙️").font(.system(size: 11))
+                            Text("PREFERENCES & TELEMETRY")
+                                .font(.system(size: 9.5, weight: .bold))
+                                .foregroundColor(Color(red: 0.60, green: 0.68, blue: 0.78))
                         }
-                        .pickerStyle(.segmented)
-                    }
 
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text("Telemetry Unit Display:")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundColor(.white)
-                        Picker("", selection: $appSettings.useBits) {
-                            Text("Bytes (KB/s, MB/s)").tag(false)
-                            Text("Bits (Kbps, Mbps)").tag(true)
+                        // Companion Reaction Source Picker
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Companion Reaction Source:")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(Color(red: 0.85, green: 0.88, blue: 0.94))
+
+                            HStack(spacing: 8) {
+                                Button(action: {
+                                    withAnimation(.spring(response: 0.25, dampingFraction: 0.75)) {
+                                        appSettings.reactionMode = .network
+                                    }
+                                }) {
+                                    HStack(spacing: 6) {
+                                        Text("⚡").font(.system(size: 11))
+                                        Text("Internet Speed")
+                                            .font(.system(size: 11, weight: appSettings.reactionMode == .network ? .bold : .medium))
+                                    }
+                                    .foregroundColor(appSettings.reactionMode == .network ? .white : Color(white: 0.65))
+                                    .padding(.vertical, 7)
+                                    .padding(.horizontal, 10)
+                                    .frame(maxWidth: .infinity)
+                                    .background(
+                                        appSettings.reactionMode == .network
+                                            ? Color(red: 0.25, green: 0.79, blue: 0.50).opacity(0.35)
+                                            : Color.white.opacity(0.06)
+                                    )
+                                    .cornerRadius(8)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .stroke(
+                                                appSettings.reactionMode == .network
+                                                    ? Color(red: 0.25, green: 0.79, blue: 0.50).opacity(0.70)
+                                                    : Color.white.opacity(0.06),
+                                                lineWidth: 1
+                                            )
+                                    )
+                                }
+                                .buttonStyle(.plain)
+
+                                Button(action: {
+                                    withAnimation(.spring(response: 0.25, dampingFraction: 0.75)) {
+                                        appSettings.reactionMode = .cpu
+                                    }
+                                }) {
+                                    HStack(spacing: 6) {
+                                        Text("🧠").font(.system(size: 11))
+                                        Text("CPU Load")
+                                            .font(.system(size: 11, weight: appSettings.reactionMode == .cpu ? .bold : .medium))
+                                    }
+                                    .foregroundColor(appSettings.reactionMode == .cpu ? .white : Color(white: 0.65))
+                                    .padding(.vertical, 7)
+                                    .padding(.horizontal, 10)
+                                    .frame(maxWidth: .infinity)
+                                    .background(
+                                        appSettings.reactionMode == .cpu
+                                            ? Color(red: 0.74, green: 0.55, blue: 0.98).opacity(0.35)
+                                            : Color.white.opacity(0.06)
+                                    )
+                                    .cornerRadius(8)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .stroke(
+                                                appSettings.reactionMode == .cpu
+                                                    ? Color(red: 0.74, green: 0.55, blue: 0.98).opacity(0.70)
+                                                    : Color.white.opacity(0.06),
+                                                lineWidth: 1
+                                            )
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                            }
                         }
-                        .pickerStyle(.segmented)
-                    }
 
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Network Speed Tiers:")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundColor(.white)
-                        ThresholdRow(label: "😊 Happy Threshold:", value: $threshHappy, unit: "KB/s", min: 50, max: 2000)
-                        ThresholdRow(label: "🎯 Focus Threshold:", value: $threshFocus, unit: "KB/s", min: 500, max: 5000)
-                        ThresholdRow(label: "😤 Strain Threshold:", value: $threshStrain, unit: "KB/s", min: 1000, max: 15000)
+                        // Telemetry Unit Display Picker
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Telemetry Unit Display:")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(Color(red: 0.85, green: 0.88, blue: 0.94))
+
+                            HStack(spacing: 8) {
+                                Button(action: {
+                                    withAnimation(.spring(response: 0.25, dampingFraction: 0.75)) {
+                                        appSettings.useBits = false
+                                    }
+                                }) {
+                                    Text("Bytes (KB/s, MB/s)")
+                                        .font(.system(size: 11, weight: !appSettings.useBits ? .bold : .medium))
+                                        .foregroundColor(!appSettings.useBits ? .white : Color(white: 0.65))
+                                        .padding(.vertical, 7)
+                                        .padding(.horizontal, 10)
+                                        .frame(maxWidth: .infinity)
+                                        .background(
+                                            !appSettings.useBits
+                                                ? Color(red: 0.22, green: 0.74, blue: 0.97).opacity(0.35)
+                                                : Color.white.opacity(0.06)
+                                        )
+                                        .cornerRadius(8)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .stroke(
+                                                    !appSettings.useBits
+                                                        ? Color(red: 0.22, green: 0.74, blue: 0.97).opacity(0.70)
+                                                        : Color.white.opacity(0.06),
+                                                    lineWidth: 1
+                                                )
+                                        )
+                                }
+                                .buttonStyle(.plain)
+
+                                Button(action: {
+                                    withAnimation(.spring(response: 0.25, dampingFraction: 0.75)) {
+                                        appSettings.useBits = true
+                                    }
+                                }) {
+                                    Text("Bits (Kbps, Mbps)")
+                                        .font(.system(size: 11, weight: appSettings.useBits ? .bold : .medium))
+                                        .foregroundColor(appSettings.useBits ? .white : Color(white: 0.65))
+                                        .padding(.vertical, 7)
+                                        .padding(.horizontal, 10)
+                                        .frame(maxWidth: .infinity)
+                                        .background(
+                                            appSettings.useBits
+                                                ? Color(red: 0.22, green: 0.74, blue: 0.97).opacity(0.35)
+                                                : Color.white.opacity(0.06)
+                                        )
+                                        .cornerRadius(8)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .stroke(
+                                                    appSettings.useBits
+                                                        ? Color(red: 0.22, green: 0.74, blue: 0.97).opacity(0.70)
+                                                        : Color.white.opacity(0.06),
+                                                    lineWidth: 1
+                                                )
+                                        )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
                     }
+                    .padding(12)
+                    .background(Color(red: 0.08, green: 0.11, blue: 0.17, opacity: 0.90))
+                    .cornerRadius(12)
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.08), lineWidth: 1))
+
+                    // Card 2: Network Speed Thresholds
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Text("🎯").font(.system(size: 11))
+                            Text("NETWORK SPEED THRESHOLDS")
+                                .font(.system(size: 9.5, weight: .bold))
+                                .foregroundColor(Color(red: 0.60, green: 0.68, blue: 0.78))
+                        }
+
+                        ThresholdRow(emoji: "😊", label: "Happy Threshold", value: $threshHappy, unit: "KB/s", min: 50, max: 2000, tint: Color(red: 0.25, green: 0.88, blue: 0.55))
+                        ThresholdRow(emoji: "🎯", label: "Focus Threshold", value: $threshFocus, unit: "KB/s", min: 500, max: 5000, tint: Color(red: 0.22, green: 0.74, blue: 0.97))
+                        ThresholdRow(emoji: "😤", label: "Strain Threshold", value: $threshStrain, unit: "KB/s", min: 1000, max: 15000, tint: Color(red: 0.98, green: 0.65, blue: 0.22))
+                    }
+                    .padding(12)
+                    .background(Color(red: 0.08, green: 0.11, blue: 0.17, opacity: 0.90))
+                    .cornerRadius(12)
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.08), lineWidth: 1))
+
+                    // Dedicated Quit Button inside Settings
+                    Button(action: {
+                        NSApplication.shared.terminate(nil)
+                    }) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "power")
+                                .font(.system(size: 12, weight: .bold))
+                            Text("Quit Notch Buddy")
+                                .font(.system(size: 11.5, weight: .bold))
+                            Spacer()
+                            Text("⌘Q")
+                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.red.opacity(0.25))
+                                .cornerRadius(4)
+                        }
+                        .foregroundColor(Color(red: 0.98, green: 0.40, blue: 0.40))
+                        .padding(.vertical, 9)
+                        .padding(.horizontal, 14)
+                        .frame(maxWidth: .infinity)
+                        .background(Color.red.opacity(0.12))
+                        .cornerRadius(10)
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.red.opacity(0.30), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
                 }
-                .padding(8)
             } else {
                 // Main Dashboard
-                HStack {
-                    let d = formatSpeed(networkMonitor.downloadSpeed, useBits: appSettings.useBits)
-                    let u = formatSpeed(networkMonitor.uploadSpeed, useBits: appSettings.useBits)
-                    let peakD = formatSpeed(networkMonitor.peakDownloadSpeed, useBits: appSettings.useBits)
-                    let peakU = formatSpeed(networkMonitor.peakUploadSpeed, useBits: appSettings.useBits)
+                let d = formatSpeed(networkMonitor.downloadSpeed, useBits: appSettings.useBits)
+                let u = formatSpeed(networkMonitor.uploadSpeed, useBits: appSettings.useBits)
+                let peakD = formatSpeed(networkMonitor.peakDownloadSpeed, useBits: appSettings.useBits)
+                let peakU = formatSpeed(networkMonitor.peakUploadSpeed, useBits: appSettings.useBits)
 
+                HStack(spacing: 10) {
+                    // Download Speed Card
                     VStack(alignment: .leading, spacing: 3) {
                         Text("DOWNLOAD SPEED")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundColor(Color(white: 0.5))
+                            .font(.system(size: 9.5, weight: .bold))
+                            .foregroundColor(Color(red: 0.60, green: 0.68, blue: 0.78))
                         Text("↓ \(d.val) \(d.unit)")
-                            .font(.system(size: 18, weight: .bold, design: .monospaced))
-                            .foregroundColor(Color(red: 0.25, green: 0.79, blue: 0.50))
+                            .font(.system(size: 19, weight: .bold, design: .monospaced))
+                            .foregroundColor(Color(red: 0.25, green: 0.88, blue: 0.55))
                         Text("Peak: \(peakD.val) \(peakD.unit)")
-                            .font(.system(size: 9.5, weight: .medium, design: .monospaced))
-                            .foregroundColor(Color(white: 0.55))
+                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .foregroundColor(Color(red: 0.72, green: 0.78, blue: 0.86))
                     }
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(red: 0.08, green: 0.11, blue: 0.17, opacity: 0.90))
+                    .cornerRadius(12)
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.08), lineWidth: 1))
 
-                    Spacer()
-
-                    VStack(alignment: .trailing, spacing: 3) {
+                    // Upload Speed Card
+                    VStack(alignment: .leading, spacing: 3) {
                         Text("UPLOAD SPEED")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundColor(Color(white: 0.5))
+                            .font(.system(size: 9.5, weight: .bold))
+                            .foregroundColor(Color(red: 0.60, green: 0.68, blue: 0.78))
                         Text("↑ \(u.val) \(u.unit)")
-                            .font(.system(size: 18, weight: .bold, design: .monospaced))
-                            .foregroundColor(Color(red: 0.35, green: 0.65, blue: 1.0))
+                            .font(.system(size: 19, weight: .bold, design: .monospaced))
+                            .foregroundColor(Color(red: 0.35, green: 0.72, blue: 1.0))
                         Text("Peak: \(peakU.val) \(peakU.unit)")
-                            .font(.system(size: 9.5, weight: .medium, design: .monospaced))
-                            .foregroundColor(Color(white: 0.55))
+                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .foregroundColor(Color(red: 0.72, green: 0.78, blue: 0.86))
                     }
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(red: 0.08, green: 0.11, blue: 0.17, opacity: 0.90))
+                    .cornerRadius(12)
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.08), lineWidth: 1))
                 }
 
                 // Real Top Bandwidth Consuming Apps (Live nettop)
-                VStack(spacing: 5) {
+                VStack(spacing: 6) {
                     HStack {
-                        HStack(spacing: 4) {
-                            Text("🔥")
+                        HStack(spacing: 5) {
+                            Text("🔥").font(.system(size: 11))
                             Text("TOP BANDWIDTH APPS")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundColor(Color(white: 0.5))
+                                .font(.system(size: 9.5, weight: .bold))
+                                .foregroundColor(Color(red: 0.60, green: 0.68, blue: 0.78))
                         }
                         Spacer()
                         Text("REAL-TIME")
                             .font(.system(size: 8.5, weight: .bold, design: .monospaced))
-                            .foregroundColor(.cyan)
+                            .foregroundColor(Color(red: 0.35, green: 0.75, blue: 1.0))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Color.cyan.opacity(0.12))
+                            .cornerRadius(4)
                     }
 
                     if networkMonitor.topProcesses.isEmpty {
                         Text("Scanning active macOS processes...")
                             .font(.system(size: 10, design: .monospaced))
-                            .foregroundColor(Color(white: 0.5))
+                            .foregroundColor(Color(white: 0.6))
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.vertical, 4)
                     } else {
@@ -464,33 +676,34 @@ public struct NotchHUDView: View {
                             HStack(spacing: 8) {
                                 Text(proc.icon).font(.system(size: 11))
                                 Text(proc.name)
-                                    .font(.system(size: 11, weight: .medium))
+                                    .font(.system(size: 11, weight: .semibold))
                                     .foregroundColor(.white)
                                 Spacer()
                                 Text(proc.speedFormatted)
-                                    .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
-                                    .foregroundColor(proc.isHighLoad ? .green : Color(white: 0.75))
+                                    .font(.system(size: 10.5, weight: .bold, design: .monospaced))
+                                    .foregroundColor(proc.isHighLoad ? Color(red: 0.25, green: 0.88, blue: 0.55) : Color(white: 0.78))
                             }
                         }
                     }
                 }
-                .padding(10)
-                .background(Color.white.opacity(0.04))
-                .cornerRadius(10)
+                .padding(11)
+                .background(Color(red: 0.08, green: 0.11, blue: 0.17, opacity: 0.90))
+                .cornerRadius(12)
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.08), lineWidth: 1))
 
                 // Monthly Data Quota Progress Bar
-                VStack(alignment: .leading, spacing: 5) {
+                VStack(alignment: .leading, spacing: 6) {
                     let totalBytes = Double(networkMonitor.sessionBytesDownloaded) + Double(networkMonitor.sessionBytesUploaded)
                     let totalGB = totalBytes / (1024.0 * 1024.0 * 1024.0)
                     let pct = min(1.0, totalGB / max(1.0, quotaLimitGB))
 
                     HStack {
                         Text("SESSION / MONTHLY DATA")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundColor(Color(white: 0.5))
+                            .font(.system(size: 9.5, weight: .bold))
+                            .foregroundColor(Color(red: 0.60, green: 0.68, blue: 0.78))
                         Spacer()
                         Text(String(format: "%.2f / %.0f GB (%.0f%%)", totalGB, quotaLimitGB, pct * 100))
-                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
                             .foregroundColor(.white)
                     }
                     GeometryReader { g in
@@ -499,15 +712,16 @@ public struct NotchHUDView: View {
                                 .fill(Color.white.opacity(0.12))
                                 .frame(height: 6)
                             RoundedRectangle(cornerRadius: 3)
-                                .fill(LinearGradient(colors: [.blue, .cyan], startPoint: .leading, endPoint: .trailing))
+                                .fill(LinearGradient(colors: [.blue, Color(red: 0.25, green: 0.85, blue: 1.0)], startPoint: .leading, endPoint: .trailing))
                                 .frame(width: max(4, g.size.width * CGFloat(pct)), height: 6)
                         }
                     }
                     .frame(height: 6)
                 }
-                .padding(10)
-                .background(Color.white.opacity(0.04))
-                .cornerRadius(10)
+                .padding(11)
+                .background(Color(red: 0.08, green: 0.11, blue: 0.17, opacity: 0.90))
+                .cornerRadius(12)
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.08), lineWidth: 1))
 
                 // Real Network Info Chips
                 HStack(spacing: 8) {
@@ -515,28 +729,31 @@ public struct NotchHUDView: View {
                         title: "INTERFACE",
                         value: networkMonitor.activeInterfaceName
                     )
+                    .frame(width: 108)
 
                     InfoChipWithAction(
                         title: "IP ADDRESS",
                         value: networkMonitor.localIPAddress,
                         actionLabel: copiedIP ? "copied!" : "copy",
-                        actionColor: copiedIP ? .green : .cyan
+                        actionColor: copiedIP ? Color(red: 0.25, green: 0.88, blue: 0.55) : Color(red: 0.35, green: 0.75, blue: 1.0)
                     ) {
                         NSPasteboard.general.clearContents()
                         NSPasteboard.general.setString(networkMonitor.localIPAddress, forType: .string)
                         copiedIP = true
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copiedIP = false }
                     }
+                    .frame(maxWidth: .infinity)
 
                     let sessMb = Double(networkMonitor.sessionBytesDownloaded) / (1024.0 * 1024.0)
                     InfoChip(
                         title: "SESSION",
                         value: sessMb > 1024 ? String(format: "%.2f GB", sessMb / 1024) : String(format: "%.0f MB", sessMb)
                     )
+                    .frame(width: 96)
                 }
 
                 // Action Buttons
-                HStack(spacing: 8) {
+                HStack(spacing: 10) {
                     Button(action: {
                         networkMonitor.runSpeedTest {}
                     }) {
@@ -545,15 +762,23 @@ public struct NotchHUDView: View {
                                 ProgressView().scaleEffect(0.6).frame(width: 12, height: 12)
                                 Text("Testing...")
                             } else {
-                                Text("⚡ Run Speedtest")
+                                Image(systemName: "bolt.fill")
+                                Text("Run Speedtest")
                             }
                         }
                         .font(.system(size: 11, weight: .bold))
                         .foregroundColor(.white)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Color.blue.opacity(0.25))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(
+                            LinearGradient(
+                                colors: [Color(red: 0.15, green: 0.45, blue: 0.98), Color(red: 0.08, green: 0.32, blue: 0.85)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
                         .cornerRadius(8)
+                        .shadow(color: Color.blue.opacity(0.3), radius: 4, y: 2)
                     }
                     .buttonStyle(.plain)
                     .disabled(networkMonitor.isSpeedtesting)
@@ -561,11 +786,12 @@ public struct NotchHUDView: View {
                     Button(action: { appSettings.useBits.toggle() }) {
                         Text(appSettings.useBits ? "⇄ to MB/s" : "⇄ to Mbps")
                             .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
-                            .foregroundColor(Color(white: 0.8))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 6)
-                            .background(Color.white.opacity(0.08))
+                            .foregroundColor(Color.white.opacity(0.9))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 7)
+                            .background(Color.white.opacity(0.10))
                             .cornerRadius(8)
+                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.12), lineWidth: 1))
                     }
                     .buttonStyle(.plain)
 
@@ -573,24 +799,42 @@ public struct NotchHUDView: View {
 
                     Button(action: { onClose() }) {
                         Text("Close")
-                            .font(.system(size: 11))
-                            .foregroundColor(Color(white: 0.6))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 6)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(Color(white: 0.75))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 7)
+                            .background(Color.white.opacity(0.06))
+                            .cornerRadius(8)
                     }
                     .buttonStyle(.plain)
                 }
             }
         }
-        .padding(14)
+        .padding(16)
         .frame(width: 440)
-        .background(.ultraThinMaterial)
-        .cornerRadius(20)
-        .overlay(
-            RoundedRectangle(cornerRadius: 20)
-                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+        .background(
+            ZStack {
+                Color(red: 0.05, green: 0.07, blue: 0.12, opacity: 0.98)
+                LinearGradient(
+                    colors: [Color.white.opacity(0.06), Color.clear],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            }
         )
-        .shadow(color: .black.opacity(0.7), radius: 24, y: 10)
+        .cornerRadius(22)
+        .overlay(
+            RoundedRectangle(cornerRadius: 22)
+                .stroke(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.22), Color.white.opacity(0.06)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
+        )
+        .shadow(color: Color.black.opacity(0.85), radius: 36, y: 16)
     }
 
     private func formatSpeed(_ bytesPerSec: Double, useBits: Bool) -> (val: String, unit: String) {
@@ -672,18 +916,21 @@ struct InfoChip: View {
     let value: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 3) {
             Text(title)
                 .font(.system(size: 8.5, weight: .bold))
-                .foregroundColor(Color(white: 0.5))
+                .foregroundColor(Color(red: 0.60, green: 0.68, blue: 0.78))
             Text(value)
-                .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                .font(.system(size: 10.5, weight: .bold, design: .monospaced))
                 .foregroundColor(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
         }
-        .padding(8)
+        .padding(9)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.white.opacity(0.04))
-        .cornerRadius(8)
+        .background(Color(red: 0.08, green: 0.11, blue: 0.17, opacity: 0.90))
+        .cornerRadius(10)
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.08), lineWidth: 1))
     }
 }
 
@@ -695,54 +942,64 @@ struct InfoChipWithAction: View {
     let action: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 3) {
             Text(title)
                 .font(.system(size: 8.5, weight: .bold))
-                .foregroundColor(Color(white: 0.5))
+                .foregroundColor(Color(red: 0.60, green: 0.68, blue: 0.78))
             HStack(spacing: 4) {
                 Text(value)
-                    .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                    .font(.system(size: 10.5, weight: .bold, design: .monospaced))
                     .foregroundColor(.white)
-                Spacer()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.80)
+                Spacer(minLength: 2)
                 Button(action: action) {
                     Text(actionLabel)
                         .font(.system(size: 8.5, weight: .bold))
                         .foregroundColor(actionColor)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 1)
-                        .background(actionColor.opacity(0.15))
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(actionColor.opacity(0.18))
                         .cornerRadius(4)
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(8)
+        .padding(9)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.white.opacity(0.04))
-        .cornerRadius(8)
+        .background(Color(red: 0.08, green: 0.11, blue: 0.17, opacity: 0.90))
+        .cornerRadius(10)
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.08), lineWidth: 1))
     }
 }
 
 // MARK: - Threshold Slider Row
 struct ThresholdRow: View {
+    let emoji: String
     let label: String
     @Binding var value: Double
     let unit: String
     let min: Double
     let max: Double
+    let tint: Color
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 1) {
+        VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text(label)
-                    .font(.system(size: 10))
-                    .foregroundColor(Color(white: 0.7))
+                Text("\(emoji) \(label)")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.white)
                 Spacer()
                 Text(String(format: "%.0f %@", value, unit))
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .foregroundColor(.white)
+                    .font(.system(size: 10.5, weight: .bold, design: .monospaced))
+                    .foregroundColor(tint)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(tint.opacity(0.15))
+                    .cornerRadius(4)
             }
             Slider(value: $value, in: min...max)
+                .accentColor(tint)
         }
     }
 }
