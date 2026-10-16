@@ -62,11 +62,14 @@
   - **AppKit Borderless Panel**: Window level configured to `.floating` / `.statusBar` with `.canJoinAllSpaces` and `.fullScreenAuxiliary` so it stays visible above all workspaces.
   - **Hardware Notch Alignment**: Uses `NSScreen.safeAreaInsets.top` and `auxiliaryTopLeftArea` APIs to detect pixel-perfect notch dimensions on Apple Silicon MacBooks (M1, M2, M3, M4).
 - **Native Android App (`android-app/`)**:
-  - **Kotlin & Jetpack Compose**: High-performance declarative Android UI with Material3.
-  - **Option B Punch-Hole Halo**: Automatically detects selfie camera cutouts with `DisplayCutout` and renders an animated glowing neon ring around the lens.
-  - **Procedural Canvas Companion**: 60 FPS hardware-accelerated Canvas ghost with sine-wave wavy tentacles, eye tracking, and glitch effects.
-  - **System Overlay (`TYPE_APPLICATION_OVERLAY`)**: Floats smoothly over any Android screen with an expanding Obsidian HUD card on tap.
-
+  - **Ghost Glitch Android Edition**: Standalone native Android version with Jetpack Compose & Material3.
+  - **Independent Overlay Controls**: Launch or turn off the **Floating Companion** and the **Camera Notch Speed Ring** independently.
+  - **Punch-Hole Notch Speed Ring**: Horizontal status bar meter (`↓ Down  ↑ Up  ( ◯ )  CPU %`) anchored at the selfie camera cutout with outer halo ring.
+  - **Dynamic Cutout Sizing**: Automatically adapts to device camera cutouts via `DisplayCutout` with a 33dp outer halo ring and 12sp status bar font matching system clock & battery.
+  - **Integrated Live CDN Speed Test Engine**: Real-time HTTP download/upload speed test and ping latency measurement directly in the HUD.
+  - **Accurate Network Detection**: Distinguishes between **Mobile Data (4G/5G LTE)** and **Wi-Fi** with real carrier IP addresses.
+  - **App Usage Breakdown**: Friendly application names (Chrome, YouTube, Spotify) for top bandwidth consumers.
+  - **Background Persistence**: Configured with `START_STICKY` and `stopWithTask="false"` so overlays remain active when swiping away the app in Recents.
 
 ---
 
@@ -107,10 +110,22 @@ You can also run it directly in developer mode via:
 ### Option 3: Building & Running the Native Android App (`android-app/`)
 
 1. Open **Android Studio**.
-2. Select **Open** and select the `android-app` folder.
+2. Select **Open** and choose the `android-app` folder.
 3. Connect an Android phone (Android 8.0+) with USB Debugging enabled, or start an emulator.
-4. Click **Run** to launch.
-5. In the app, tap **Grant** for *Display over other apps*, then tap **Launch Punch-Hole Overlay**!
+4. Click **Run ▶️** (Shift + F10) to install and launch.
+5. In the app:
+   - Tap **Grant** for *Draw over other apps*.
+   - Tap **Exempt** for *Battery Optimization*.
+   - Toggle **Launch Floating Companion** and/or **Launch Notch Speed Ring** independently!
+
+#### Building via Command Line:
+```bash
+cd android-app
+./gradlew assembleDebug
+
+# Install directly to your device:
+adb -d install -r app/build/outputs/apk/debug/app-debug.apk
+```
 
 
 ---
