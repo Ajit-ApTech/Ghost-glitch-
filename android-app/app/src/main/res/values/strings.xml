@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Ghost Glitch</string>
+    <string name="overlay_service_title">Ghost Glitch Active</string>
+    <string name="overlay_service_desc">Camera punch-hole speed ring &amp; glitch companion live</string>
+    <string name="perm_overlay_title">Display Over Other Apps</string>
+    <string name="perm_overlay_desc">Required to show the punch-hole halo and companion over your screen.</string>
+    <string name="perm_usage_title">App Usage Access</string>
+    <string name="perm_usage_desc">Optional: Allows showing top bandwidth consuming apps.</string>
+</resources>

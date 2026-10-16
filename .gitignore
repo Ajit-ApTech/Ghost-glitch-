@@ -14,3 +14,15 @@ DerivedData/
 # Logs & temp
 *.log
 *.app/
+
+# Android build & cache files
+.gradle/
+**/build/
+*.apk
+*.aab
+local.properties
+.idea/
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/

@@ -61,6 +61,12 @@
   - **Swift & SwiftUI**: Native macOS status bar / floating panel application.
   - **AppKit Borderless Panel**: Window level configured to `.floating` / `.statusBar` with `.canJoinAllSpaces` and `.fullScreenAuxiliary` so it stays visible above all workspaces.
   - **Hardware Notch Alignment**: Uses `NSScreen.safeAreaInsets.top` and `auxiliaryTopLeftArea` APIs to detect pixel-perfect notch dimensions on Apple Silicon MacBooks (M1, M2, M3, M4).
+- **Native Android App (`android-app/`)**:
+  - **Kotlin & Jetpack Compose**: High-performance declarative Android UI with Material3.
+  - **Option B Punch-Hole Halo**: Automatically detects selfie camera cutouts with `DisplayCutout` and renders an animated glowing neon ring around the lens.
+  - **Procedural Canvas Companion**: 60 FPS hardware-accelerated Canvas ghost with sine-wave wavy tentacles, eye tracking, and glitch effects.
+  - **System Overlay (`TYPE_APPLICATION_OVERLAY`)**: Floats smoothly over any Android screen with an expanding Obsidian HUD card on tap.
+
 
 ---
 
@@ -95,6 +101,17 @@ You can also run it directly in developer mode via:
 ```bash
 ./start-notch-buddy.command
 ```
+
+---
+
+### Option 3: Building & Running the Native Android App (`android-app/`)
+
+1. Open **Android Studio**.
+2. Select **Open** and select the `android-app` folder.
+3. Connect an Android phone (Android 8.0+) with USB Debugging enabled, or start an emulator.
+4. Click **Run** to launch.
+5. In the app, tap **Grant** for *Display over other apps*, then tap **Launch Punch-Hole Overlay**!
+
 
 ---
 

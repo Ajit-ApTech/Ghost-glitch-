@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.NotchBuddy" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">#0A0D14</item>
+        <item name="android:navigationBarColor">#0A0D14</item>
+        <item name="android:windowBackground">#0A0D14</item>
+        <item name="android:windowSplashScreenBackground">#0A0D14</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_launcher</item>
+    </style>
+</resources>
